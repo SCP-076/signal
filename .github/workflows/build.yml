@@ -56,18 +56,26 @@ jobs:
         path: sourcemod
         submodules: true
 
-    # 6. Configure AMBuild project (Force standalone build folder)
-    - name: Configure AMBuild
+    # 6-7. Configure AMBuild project (Force standalone build folder)
+    - name: Configure and Compile
       working-directory: extension
       run: |
-        mkdir build
+        mkdir -p build
         cd build
-        python3 ../configure.py --enable-optimize --targets=x86,x86_64 --sm-path="${{ github.workspace }}/sourcemod" --mms-path="${{ github.workspace }}/metamod-source"
 
-    # 7. Execute compilation
-    - name: Compile
-      working-directory: extension/build
-      run: ambuild
+        echo "=== Configuring AMBuild ==="
+        python3 ../configure.py --enable-optimize --sm-path="${{ github.workspace }}/sourcemod" --mms-path="${{ github.workspace }}/metamod-source"
+
+        echo "=== Check Directory Contents ==="
+        ls -la
+        
+        if [ ! -d ".ambuild2" ]; then
+          echo "ERROR: .ambuild2 is missing in the build/ directory! Checking parent directory..."
+          ls -la ../
+        fi
+
+        echo "=== Running AMBuild ==="
+        ambuild
 
     # 8. Collect compiled files and upload as Artifact
     - name: Upload Artifacts
