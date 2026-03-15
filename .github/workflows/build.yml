@@ -1,6 +1,6 @@
 name: Build Signal Extension
 
-# 当推送到 main/master 分支，或者手动触发时执行此流程
+# Execute this workflow on push to main/master branches or manual trigger
 on:
   push:
     branches: [ "main", "master" ]
@@ -9,60 +9,117 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
-    name: Build on ${{ matrix.os }}
-    # 使用矩阵策略，同时启动 Windows 和 Linux 服务器
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        # 将 ubuntu-latest 改为 ubuntu-20.04 以降低 glibc 版本要求
-        os: [ubuntu-20.04, windows-latest]
+  # ==========================================
+  # LINUX BUILD JOB (Using Ubuntu 20.04 Container)
+  # ==========================================
+  build-linux:
+    name: Build on Linux (Ubuntu 20.04)
+    # Use the latest runner, but execute everything inside an older Ubuntu 20.04 container
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:20.04
 
     steps:
-    # 1. 获取你的扩展源代码
+    # 1. Install necessary packages inside the raw Ubuntu 20.04 container
+    # Git is required for the checkout step, and gcc/g++ are required for compilation
+    - name: Install Build Dependencies
+      run: |
+        apt-get update
+        apt-get install -y git python3 python3-pip gcc-multilib g++-multilib linux-libc-dev:i386
+
+    # 2. Checkout the extension source code
     - name: Checkout Extension Source
       uses: actions/checkout@v4
 
-    # 2. 安装 Python (AMBuild 的运行环境)
+    # 3. Install AMBuild tool
+    - name: Install AMBuild
+      run: |
+        python3 -m pip install --upgrade pip setuptools wheel
+        python3 -m pip install git+https://github.com/alliedmodders/ambuild
+
+    # 4. Checkout Metamod:Source (Root directory)
+    - name: Checkout Metamod:Source
+      uses: actions/checkout@v4
+      with:
+        repository: alliedmodders/metamod-source
+        ref: '1.12-dev'  # <--- Specify branch or tag here
+        path: metamod-source
+        submodules: true
+
+    # 5. Checkout SourceMod (Root directory)
+    - name: Checkout SourceMod
+      uses: actions/checkout@v4
+      with:
+        repository: alliedmodders/sourcemod
+        ref: '1.12-dev'  # <--- Specify branch or tag here
+        path: sourcemod
+        submodules: true
+
+    # 6. Configure AMBuild project (Force standalone build folder)
+    - name: Configure AMBuild
+      working-directory: extension
+      run: |
+        mkdir build
+        cd build
+        python3 ../configure.py --enable-optimize --targets=x86,x86_64 --sm-path="${{ github.workspace }}/sourcemod" --mms-path="${{ github.workspace }}/metamod-source"
+
+    # 7. Execute compilation
+    - name: Compile
+      working-directory: extension/build
+      run: ambuild
+
+    # 8. Collect compiled files and upload as Artifact
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: signal-extension-Linux-x86-x64
+        # Precisely specify the path of the packaged artifacts
+        path: extension/build/package/
+
+
+  # ==========================================
+  # WINDOWS BUILD JOB
+  # ==========================================
+  build-windows:
+    name: Build on Windows
+    runs-on: windows-latest
+
+    steps:
+    # 1. Checkout the extension source code
+    - name: Checkout Extension Source
+      uses: actions/checkout@v4
+
+    # 2. Setup Python (AMBuild runtime environment)
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.10'
 
-    # 3. 安装 AMBuild 工具
+    # 3. Install AMBuild tool
     - name: Install AMBuild
       run: |
         python -m pip install --upgrade pip setuptools wheel
         pip install git+https://github.com/alliedmodders/ambuild
 
-    # 4. 下载 Metamod:Source 源码依赖 (存放在根目录)
+    # 4. Checkout Metamod:Source (Root directory)
     - name: Checkout Metamod:Source
       uses: actions/checkout@v4
       with:
         repository: alliedmodders/metamod-source
-        ref: '1.12-dev'  # <--- 在这里指定分支或 Tag
+        ref: '1.12-dev'  # <--- Specify branch or tag here
         path: metamod-source
         submodules: true
 
-    # 5. 下载 SourceMod 源码依赖 (存放在根目录)
+    # 5. Checkout SourceMod (Root directory)
     - name: Checkout SourceMod
       uses: actions/checkout@v4
       with:
         repository: alliedmodders/sourcemod
-        ref: '1.12-dev'  # <--- 在这里指定分支或 Tag
+        ref: '1.12-dev'  # <--- Specify branch or tag here
         path: sourcemod
         submodules: true
-        
-    # 6. (仅限 Linux) 安装 32 位编译依赖库
-    # 即使我们要编译 64 位，也需要保留这些以支持 x86 架构的交叉编译
-    - name: Install Linux 32-bit Dependencies
-      if: runner.os == 'Linux'
-      run: |
-        sudo dpkg --add-architecture i386
-        sudo apt-get update
-        sudo apt-get install -y gcc-multilib g++-multilib linux-libc-dev:i386
 
-    # 7. 配置 AMBuild 项目 (强制使用独立的 build 文件夹)
+    # 6. Configure AMBuild project (Force standalone build folder)
     - name: Configure AMBuild
       working-directory: extension
       run: |
@@ -70,15 +127,15 @@ jobs:
         cd build
         python ../configure.py --enable-optimize --targets=x86,x86_64 --sm-path="${{ github.workspace }}/sourcemod" --mms-path="${{ github.workspace }}/metamod-source"
 
-    # 8. 执行编译
+    # 7. Execute compilation
     - name: Compile
       working-directory: extension/build
       run: ambuild
 
-    # 9. 收集打包好的文件并上传为 Artifact
+    # 8. Collect compiled files and upload as Artifact
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: signal-extension-${{ runner.os }}-x86-x64
-        # 精确指定打包产物的存放路径
+        name: signal-extension-Windows-x86-x64
+        # Precisely specify the path of the packaged artifacts
         path: extension/build/package/

@@ -5,7 +5,6 @@
 #endif
 #define _plugin_signalslot
 
-#pragma newdecls required
 /**
  * ============================================================================
  * Internal Signal-Slot System
@@ -29,8 +28,8 @@ typeset FunctionSignalSlot
 	function Action(any data);
 }
 
-
-#define SIG(%1) public const Signal %1;//Declares a new signal variable.
+//Declares a new signal variable.
+#define SIG(%1) public const Signal %1;
 #define SigPriority(%1) (%1)
 
 /**
@@ -79,7 +78,8 @@ enum struct Signal
 	/**
 	 * Retrieves the number of slot functions currently connected to this signal.
 	 * 
-	 * @return          The total count of active slots connected to the signal. Returns 0 if none are connected.
+	 * @return          The total count of active slots connected to the signal. 
+	 *                  Returns 0 if none are connected.
 	 */
     int SlotCount()
     {
@@ -109,7 +109,8 @@ native Action EmitSignal(Signal signal,any data = 0, EmitSignalFlag flags = ES_N
  * Retrieves the number of slot functions currently connected to a specific signal.
  *
  * @param signal    The signal variable to query.
- * @return          The total count of active slots connected to the signal. Returns 0 if none are connected.
+ * @return          The total count of active slots connected to the signal. 
+ *                  Returns 0 if none are connected.
  */
 native int GetSignalSlotCount(Signal signal);
 
