@@ -40,8 +40,8 @@
 /* Basic information exposed publicly */
 #define SMEXT_CONF_NAME			"Signal Extension"
 #define SMEXT_CONF_DESCRIPTION	"Signal in SourcePawn"
-#define SMEXT_CONF_VERSION		"1.0.0.0"
-#define SMEXT_CONF_AUTHOR		"AlliedModders"
+#define SMEXT_CONF_VERSION		"1.1.0.0"
+#define SMEXT_CONF_AUTHOR		"SCP-076"
 #define SMEXT_CONF_URL			"http://www.sourcemod.net/"
 #define SMEXT_CONF_LOGTAG		"SIGNAL"
 #define SMEXT_CONF_LICENSE		"GPL"

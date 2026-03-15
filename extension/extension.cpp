@@ -34,7 +34,7 @@
 #include <vector>
 #include <string>
 #include <algorithm>
-#include <cstring> // 确保包含了此头文件以使用 strnlen
+#include <cstring>
 #include <IRootConsoleMenu.h>
 
 using namespace SourceMod;
@@ -53,18 +53,18 @@ SMEXT_LINK(&g_Sample);
 #define MAX_LEN_SIGNAL_SLOT 32
 
 // ======================================================================
-// 1. 内存映射结构体 (与 inc 确保严格 72 字节对齐)
+// 1. Memory-mapped structure (Ensure strict alignment with inc)
 // ======================================================================
 struct Cpp_SignalSlot {
-    cell_t global;       // 偏移: 0 bytes
-    cell_t priority;     // 偏移: 4 bytes
-    char slot[MAX_LEN_SIGNAL_SLOT];   // 偏移: 8 bytes
-    char signal[MAX_LEN_SIGNAL_NAME]; // 偏移: 40 bytes
+    cell_t global;       // Offset: 0 bytes
+    cell_t priority;     // Offset: 4 bytes
+    char slot[MAX_LEN_SIGNAL_SLOT];   // Offset: 8 bytes
+    char signal[MAX_LEN_SIGNAL_NAME]; // Offset: 40 bytes
 };
 static_assert(sizeof(Cpp_SignalSlot) == 72, "Cpp_SignalSlot size mismatch! Check struct padding.");
 
 // ======================================================================
-// 2. 核心数据容器与控制标志位
+// 2. Core Data Containers and Control Flags
 // ======================================================================
 struct SlotInfo {
     IPluginFunction* func;
@@ -81,8 +81,8 @@ struct SignalGroup {
 };
 
 struct PluginSignalContainer {
-    std::string plugin_name; 
-    std::unordered_map<cell_t*, SignalGroup> signals;// 使用 信号 pubvar 的物理内存地址 作为 O(1) 匹配的哈希键
+    std::string plugin_name;
+    std::unordered_map<cell_t*, SignalGroup> signals;
 };
 
 std::unordered_map<IPluginContext*, PluginSignalContainer> g_PluginSignals;
@@ -96,22 +96,23 @@ enum EmitSignalFlag
 };
 
 // ======================================================================
-// 3. Native 函数实现
+// 3. Native Function Implementations
 // ======================================================================
 cell_t EmitSignal_Native(IPluginContext* pContext, const cell_t* params)
 {
-    // params[1] = signal (Signal的数组 Local 地址)
+    // params[1] = signal (Local array address of the Signal)
     // params[2] = data
     // params[3] = flags (EmitSignalFlag)
 
     int flags = params[3];
 
-    // 将传递过来的信号局部地址转换为插件内存的物理地址
+    // Convert the provided local signal address to the plugin's physical memory address
     cell_t* phys_addr;
     if (pContext->LocalToPhysAddr(params[1], &phys_addr) != SP_ERROR_NONE) {
         return pContext->ThrowNativeError("Invalid signal address provided.");
     }
-    // 查找当前插件的信号容器
+
+    // Look up the signal container for the current plugin
     auto it = g_PluginSignals.find(pContext);
     if (it == g_PluginSignals.end()) {
         if (flags & ES_RequireSlot) {
@@ -120,7 +121,7 @@ cell_t EmitSignal_Native(IPluginContext* pContext, const cell_t* params)
         return 0;
     }
 
-    // O(1) 极速匹配物理地址
+    // O(1) fast matching using physical address
     auto sig_it = it->second.signals.find(phys_addr);
 
     if (sig_it == it->second.signals.end() || sig_it->second.slots.empty()) {
@@ -132,7 +133,7 @@ cell_t EmitSignal_Native(IPluginContext* pContext, const cell_t* params)
 
     cell_t max_result = 0;
     bool has_executed = false;
-    cell_t data = params[2]; 
+    cell_t data = params[2];
 
     for (const SlotInfo& slot : sig_it->second.slots)
     {
@@ -166,31 +167,30 @@ cell_t EmitSignal_Native(IPluginContext* pContext, const cell_t* params)
 
 cell_t GetSignalSlotCount_Native(IPluginContext* pContext, const cell_t* params)
 {
-    // params[1] = signal (Signal的数组 Local 地址)
+    // params[1] = signal (Local array address of the Signal)
 
-    // 将传递过来的信号局部地址转换为插件内存的物理地址
     cell_t* phys_addr;
     if (pContext->LocalToPhysAddr(params[1], &phys_addr) != SP_ERROR_NONE) {
         return pContext->ThrowNativeError("Invalid signal address provided.");
     }
 
-    // 查找当前插件的信号容器
+    // Look up the signal container for the current plugin
     auto it = g_PluginSignals.find(pContext);
     if (it == g_PluginSignals.end()) {
-        return 0; // 插件内没有任何信号槽被激活，数量自然为 0
+        return 0;
     }
 
-    // O(1) 匹配物理地址，查找该信号的槽列表
+    // O(1) match physical address to find the slot list for this signal
     auto sig_it = it->second.signals.find(phys_addr);
     if (sig_it == it->second.signals.end()) {
-        return 0; // 找不到这个信号对应的槽，返回 0
+        return 0;
     }
 
     return static_cast<cell_t>(sig_it->second.slots.size());
 }
 
 // ======================================================================
-// 4. 插件生命周期管理器 (解析、校验与拦截)
+// 4. Plugin Lifecycle Manager (Parsing, Validation, and Interception)
 // ======================================================================
 class SignalSlotManager : public IPluginsListener
 {
@@ -200,12 +200,12 @@ public:
         IPluginContext* context = plugin->GetBaseContext();
         if (!context) return;
 
-        // 确保不会有任何数据残留
+        // Ensure no residual data remains
         g_PluginSignals.erase(context);
 
         uint32_t check_idx;
         if (context->FindPubvarByName("__include_signal__", &check_idx) != SP_ERROR_NONE) {
-            return; // 不包含激活标识，直接跳过
+            return; // Skip if the activation identifier is not present
         }
 
         PluginSignalContainer container;
@@ -218,11 +218,11 @@ public:
             {
                 Cpp_SignalSlot* slot_data = reinterpret_cast<Cpp_SignalSlot*>(pubvar->offs);
 
-                // 提取安全字符串用于查找和报错
+                // Extract safe strings for lookup and error reporting
                 std::string safe_slot_name(slot_data->slot, strnlen(slot_data->slot, MAX_LEN_SIGNAL_SLOT));
                 std::string safe_signal_name(slot_data->signal, strnlen(slot_data->signal, MAX_LEN_SIGNAL_NAME));
 
-                // 1. 获取并检查槽函数是否存在
+                // 1. Retrieve and verify the existence of the slot function
                 IPluginFunction* func = context->GetFunctionByName(safe_slot_name.c_str());
                 if (!func)
                 {
@@ -236,7 +236,7 @@ public:
                     return;
                 }
 
-                // 2. 根据记录的 signal 字符串获取目标信号的物理地址
+                // 2. Get the physical address of the target signal based on the recorded signal string
                 uint32_t sig_pubvar_idx;
                 if (context->FindPubvarByName(safe_signal_name.c_str(), &sig_pubvar_idx) != SP_ERROR_NONE)
                 {
@@ -254,23 +254,23 @@ public:
                 context->GetPubvarByIndex(sig_pubvar_idx, &sig_pubvar);
                 cell_t* sig_phys_addr = sig_pubvar->offs;
 
-                // 3. 将槽函数信息按物理地址进行归类（此时不再存储 safe_slot_name）
+                // 3. Group slot function information by physical address
                 auto sig_it = container.signals.find(sig_phys_addr);
                 if (sig_it != container.signals.end())
                 {
-                    sig_it->second.slots.push_back({ func, slot_data->priority }); // 修改点
+                    sig_it->second.slots.push_back({ func, slot_data->priority });
                 }
                 else
                 {
                     SignalGroup group;
                     group.signal_name = safe_signal_name;
-                    group.slots.push_back({ func, slot_data->priority }); // 修改点
+                    group.slots.push_back({ func, slot_data->priority });
                     container.signals[sig_phys_addr] = std::move(group);
                 }
             }
         }
 
-        // 按优先级排序
+        // Sort by priority
         for (auto& pair : container.signals) {
             std::sort(pair.second.slots.begin(), pair.second.slots.end());
         }
@@ -299,7 +299,7 @@ private:
 SignalSlotManager g_SignalSlotManager;
 
 // ======================================================================
-// 控制台指令: sm signals
+// Console Command: sm signals
 // ======================================================================
 
 class DumpSignalCommand : public IRootConsoleCommand
@@ -343,7 +343,6 @@ public:
                 rootconsole->ConsolePrint("  Signal: %s (Address: %p)", sig_pair.second.signal_name.c_str(), sig_pair.first);
 
                 for (const auto& slot : sig_pair.second.slots) {
-                    // 修改点：在此处直接调用 slot.func->DebugName() 获取函数名
                     rootconsole->ConsolePrint("    -> Slot: %s [Priority: %d]", slot.func->DebugName(), slot.priority);
                 }
             }
@@ -356,7 +355,7 @@ public:
 }g_DumpSignalCmd;
 
 // ======================================================================
-// 5. 注册列表与生命周期
+// 5. Registration List and Lifecycle
 // ======================================================================
 
 static const sp_nativeinfo_t MyNatives[] =
@@ -391,22 +390,21 @@ void ShutdownSignalSlotSystem()
 }
 
 // ======================================================================
-// 6. SourceMod 扩展生命周期回调
+// 6. SourceMod Extension Lifecycle Callbacks
 // ======================================================================
 
 bool Sample::SDK_OnLoad(char* error, size_t maxlength, bool late)
 {
-    InitializeSignalSlotSystem(late); // 初始化信号槽系统，并传入 late 状态
+    InitializeSignalSlotSystem(late);
     return true;
 }
 
 void Sample::SDK_OnUnload()
 {
-    ShutdownSignalSlotSystem(); // 卸载信号槽系统
+    ShutdownSignalSlotSystem();
 }
 
 void Sample::SDK_OnAllLoaded()
 {
-    // 直接将 Natives 数组导入 SourceMod 系统
     sharesys->AddNatives(myself, MyNatives);
 }

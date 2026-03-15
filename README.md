@@ -74,7 +74,7 @@ public Action FunctionB(int client)
 ```
 
 ## 3. Execution Priorities
-By default, the execution order of slot functions is not guaranteed. If you require strict execution sequencing, use the CONNECT_SIG_EX macro to assign a custom priority. Higher priority values execute first.
+By default, the execution order of slot functions is not guaranteed. If you require strict execution sequencing, use the `CONNECT_SIG_EX` macro to assign a custom priority. Higher priority values execute first.
 
 ```sourcepawn
 CONNECT_SIG_EX(FuncA, AnySignal, SigPriority(100))  // Executes first (highest priority)
