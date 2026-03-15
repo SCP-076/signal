@@ -17,7 +17,13 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    # 1️⃣ Install dependencies
+    # 1️⃣ Checkout YOUR extension repository
+    - name: Checkout Extension Source
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    # 2️⃣ Install build dependencies
     - name: Install Build Dependencies
       run: |
         sudo dpkg --add-architecture i386
@@ -30,54 +36,59 @@ jobs:
           python3-pip \
           git
 
-    # 2️⃣ Checkout extension
-    - name: Checkout Extension Source
-      uses: actions/checkout@v4
-
     # 3️⃣ Install AMBuild
     - name: Install AMBuild
       run: |
         python3 -m pip install --upgrade pip setuptools wheel
         python3 -m pip install git+https://github.com/alliedmodders/ambuild
 
-    # 4️⃣ Checkout Metamod:Source
-    # IMPORTANT: folder MUST be named "mmsource"
+    # 4️⃣ Checkout Metamod into subfolder (IMPORTANT)
     - name: Checkout Metamod:Source
       uses: actions/checkout@v4
       with:
         repository: alliedmodders/metamod-source
         ref: 1.12-dev
         path: mmsource
+        fetch-depth: 0
         submodules: recursive
 
-    # 5️⃣ Checkout SourceMod
+    # 5️⃣ Checkout SourceMod into subfolder (IMPORTANT)
     - name: Checkout SourceMod
       uses: actions/checkout@v4
       with:
         repository: alliedmodders/sourcemod
         ref: 1.12-dev
         path: sourcemod
+        fetch-depth: 0
         submodules: recursive
 
-    # 6️⃣ Configure & Build
+    # 6️⃣ VERIFY structure (debug safety)
+    - name: Verify Directory Structure
+      run: |
+        echo "=== ROOT ==="
+        ls -la
+        echo "=== MMSOURCE ==="
+        ls -la mmsource
+        echo "=== SOURCEMOD ==="
+        ls -la sourcemod
+
+    # 7️⃣ Configure and Build
     - name: Configure and Compile
       working-directory: extension
       run: |
         mkdir build
         cd build
 
-        echo "=== Directory Structure ==="
-        ls -la ..
-        ls -la ../mmsource
-        ls -la ../sourcemod
-
         echo "=== Configuring AMBuild ==="
-        python3 ../configure.py --enable-optimize
+        python3 ../configure.py \
+          --enable-optimize \
+          --mms-path=../mmsource \
+          --sm-path=../sourcemod
 
         echo "=== Running AMBuild ==="
         ambuild
 
-    # 7️⃣ Upload artifacts
+    # 8️⃣ Upload artifacts
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
@@ -95,6 +106,8 @@ jobs:
     steps:
     - name: Checkout Extension Source
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -106,13 +119,13 @@ jobs:
         python -m pip install --upgrade pip setuptools wheel
         pip install git+https://github.com/alliedmodders/ambuild
 
-    # IMPORTANT: folder name MUST be mmsource
     - name: Checkout Metamod:Source
       uses: actions/checkout@v4
       with:
         repository: alliedmodders/metamod-source
         ref: 1.12-dev
         path: mmsource
+        fetch-depth: 0
         submodules: recursive
 
     - name: Checkout SourceMod
@@ -121,7 +134,18 @@ jobs:
         repository: alliedmodders/sourcemod
         ref: 1.12-dev
         path: sourcemod
+        fetch-depth: 0
         submodules: recursive
+
+    - name: Verify Directory Structure
+      shell: pwsh
+      run: |
+        Write-Host "=== ROOT ==="
+        Get-ChildItem
+        Write-Host "=== MMSOURCE ==="
+        Get-ChildItem mmsource
+        Write-Host "=== SOURCEMOD ==="
+        Get-ChildItem sourcemod
 
     - name: Configure and Compile
       working-directory: extension
@@ -130,13 +154,11 @@ jobs:
         mkdir build
         cd build
 
-        Write-Host "=== Directory Structure ==="
-        Get-ChildItem ..
-        Get-ChildItem ../mmsource
-        Get-ChildItem ../sourcemod
-
         Write-Host "=== Configuring AMBuild ==="
-        python ../configure.py --enable-optimize
+        python ../configure.py `
+          --enable-optimize `
+          --mms-path=..\mmsource `
+          --sm-path=..\sourcemod
 
         Write-Host "=== Running AMBuild ==="
         ambuild
