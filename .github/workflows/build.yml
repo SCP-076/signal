@@ -14,14 +14,14 @@ jobs:
   # ==========================================
   build-linux:
     name: Build on Linux (Ubuntu 20.04)
-    # Use the latest runner, but execute everything inside an older Ubuntu 20.04 container
+    # Use the latest runner, but execute everything inside an older Ubuntu 20.04 container for glibc compatibility
     runs-on: ubuntu-latest
     container:
       image: ubuntu:20.04
 
     steps:
     # 1. Install necessary packages inside the raw Ubuntu 20.04 container
-    # Git is required for the checkout step, and gcc/g++ are required for compilation
+    # Enable i386 architecture first, then install git, python, and 32/64-bit C++ compilers
     - name: Install Build Dependencies
       run: |
         dpkg --add-architecture i386
@@ -60,7 +60,7 @@ jobs:
     - name: Configure and Compile
       working-directory: extension
       env:
-        # Environment variables act as the ultimate fallback for AMBuild if arguments fail
+        # Environment variables act as the ultimate fallback for AMBuild if arguments are not parsed properly
         SM_PATH: ${{ github.workspace }}/sourcemod
         MMS_PATH: ${{ github.workspace }}/metamod-source
       run: |
@@ -68,8 +68,8 @@ jobs:
         cd build
 
         echo "=== Configuring AMBuild ==="
-        # Using underscore parameters (--sm_path and --mms_path) to ensure compatibility
-        python3 ../configure.py --enable-optimize --sm_path="${{ github.workspace }}/sourcemod" --mms_path="${{ github.workspace }}/metamod-source"
+        # Use dashes (--sm-path and --mms-path) for argparse compatibility
+        python3 ../configure.py --enable-optimize --sm-path="${{ github.workspace }}/sourcemod" --mms-path="${{ github.workspace }}/metamod-source"
 
         echo "=== Running AMBuild ==="
         ambuild
@@ -129,7 +129,7 @@ jobs:
     - name: Configure and Compile
       working-directory: extension
       env:
-        # Environment variables act as the ultimate fallback for AMBuild if arguments fail
+        # Environment variables act as the ultimate fallback for AMBuild if arguments are not parsed properly
         SM_PATH: ${{ github.workspace }}\sourcemod
         MMS_PATH: ${{ github.workspace }}\metamod-source
       run: |
@@ -137,8 +137,8 @@ jobs:
         cd build
         
         echo "=== Configuring AMBuild ==="
-        # Using underscore parameters (--sm_path and --mms_path) for Windows compatibility
-        python ../configure.py --enable-optimize --sm_path="${{ github.workspace }}\sourcemod" --mms_path="${{ github.workspace }}\metamod-source"
+        # Use dashes (--sm-path and --mms-path) for argparse compatibility
+        python ../configure.py --enable-optimize --sm-path="${{ github.workspace }}\sourcemod" --mms-path="${{ github.workspace }}\metamod-source"
 
         echo "=== Running AMBuild ==="
         ambuild
