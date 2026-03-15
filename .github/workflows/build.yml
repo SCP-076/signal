@@ -17,13 +17,11 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    # 1️⃣ Checkout YOUR extension repository
+    # 1️⃣ Checkout extension repo
     - name: Checkout Extension Source
       uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
 
-    # 2️⃣ Install build dependencies
+    # 2️⃣ Install dependencies
     - name: Install Build Dependencies
       run: |
         sudo dpkg --add-architecture i386
@@ -42,35 +40,31 @@ jobs:
         python3 -m pip install --upgrade pip setuptools wheel
         python3 -m pip install git+https://github.com/alliedmodders/ambuild
 
-    # 4️⃣ Checkout Metamod into subfolder (IMPORTANT)
+    # 4️⃣ Checkout Metamod:Source
     - name: Checkout Metamod:Source
       uses: actions/checkout@v4
       with:
         repository: alliedmodders/metamod-source
         ref: 1.12-dev
         path: mmsource
-        fetch-depth: 0
         submodules: recursive
 
-    # 5️⃣ Checkout SourceMod into subfolder (IMPORTANT)
+    # 5️⃣ Checkout SourceMod
     - name: Checkout SourceMod
       uses: actions/checkout@v4
       with:
         repository: alliedmodders/sourcemod
         ref: 1.12-dev
         path: sourcemod
-        fetch-depth: 0
         submodules: recursive
 
-    # 6️⃣ VERIFY structure (debug safety)
+    # 6️⃣ Verify folders exist (important debug)
     - name: Verify Directory Structure
       run: |
-        echo "=== ROOT ==="
-        ls -la
-        echo "=== MMSOURCE ==="
-        ls -la mmsource
-        echo "=== SOURCEMOD ==="
-        ls -la sourcemod
+        echo "Workspace: ${{ github.workspace }}"
+        ls -la ${{ github.workspace }}
+        ls -la ${{ github.workspace }}/mmsource
+        ls -la ${{ github.workspace }}/sourcemod
 
     # 7️⃣ Configure and Build
     - name: Configure and Compile
@@ -80,10 +74,11 @@ jobs:
         cd build
 
         echo "=== Configuring AMBuild ==="
+
         python3 ../configure.py \
           --enable-optimize \
-          --mms-path=../mmsource \
-          --sm-path=../sourcemod
+          --mms-path="${{ github.workspace }}/mmsource" \
+          --sm-path="${{ github.workspace }}/sourcemod"
 
         echo "=== Running AMBuild ==="
         ambuild
@@ -106,8 +101,6 @@ jobs:
     steps:
     - name: Checkout Extension Source
       uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -125,7 +118,6 @@ jobs:
         repository: alliedmodders/metamod-source
         ref: 1.12-dev
         path: mmsource
-        fetch-depth: 0
         submodules: recursive
 
     - name: Checkout SourceMod
@@ -134,18 +126,7 @@ jobs:
         repository: alliedmodders/sourcemod
         ref: 1.12-dev
         path: sourcemod
-        fetch-depth: 0
         submodules: recursive
-
-    - name: Verify Directory Structure
-      shell: pwsh
-      run: |
-        Write-Host "=== ROOT ==="
-        Get-ChildItem
-        Write-Host "=== MMSOURCE ==="
-        Get-ChildItem mmsource
-        Write-Host "=== SOURCEMOD ==="
-        Get-ChildItem sourcemod
 
     - name: Configure and Compile
       working-directory: extension
@@ -155,10 +136,11 @@ jobs:
         cd build
 
         Write-Host "=== Configuring AMBuild ==="
+
         python ../configure.py `
           --enable-optimize `
-          --mms-path=..\mmsource `
-          --sm-path=..\sourcemod
+          --mms-path="${{ github.workspace }}\mmsource" `
+          --sm-path="${{ github.workspace }}\sourcemod"
 
         Write-Host "=== Running AMBuild ==="
         ambuild
