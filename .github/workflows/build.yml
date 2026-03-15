@@ -1,6 +1,5 @@
 name: Build Signal Extension
 
-# Execute this workflow on push to main/master branches or manual trigger
 on:
   push:
     branches: [ "main", "master" ]
@@ -9,77 +8,76 @@ on:
   workflow_dispatch:
 
 jobs:
+
   # ==========================================
-  # LINUX BUILD JOB (Using Ubuntu 20.04 Container)
+  # LINUX BUILD
   # ==========================================
   build-linux:
-    name: Build on Linux (Ubuntu 20.04)
-    runs-on: ubuntu-latest
-
-    # Run everything inside Ubuntu 20.04 container (for glibc compatibility)
-    container:
-      image: ubuntu:20.04
+    name: Build on Linux
+    runs-on: ubuntu-22.04
 
     steps:
-    # 1. Install required dependencies inside container
+    # 1️⃣ Install dependencies
     - name: Install Build Dependencies
       run: |
-        dpkg --add-architecture i386
-        apt-get update
-        apt-get install -y \
-          git \
-          python3 \
-          python3-pip \
+        sudo dpkg --add-architecture i386
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
           gcc-multilib \
           g++-multilib \
-          linux-libc-dev:i386
+          python3 \
+          python3-pip \
+          git
 
-    # 2. Checkout extension source
+    # 2️⃣ Checkout extension
     - name: Checkout Extension Source
       uses: actions/checkout@v4
 
-    # 3. Install AMBuild
+    # 3️⃣ Install AMBuild
     - name: Install AMBuild
       run: |
         python3 -m pip install --upgrade pip setuptools wheel
         python3 -m pip install git+https://github.com/alliedmodders/ambuild
 
-    # 4. Checkout Metamod:Source
+    # 4️⃣ Checkout Metamod:Source
+    # IMPORTANT: folder MUST be named "mmsource"
     - name: Checkout Metamod:Source
       uses: actions/checkout@v4
       with:
         repository: alliedmodders/metamod-source
-        ref: '1.12-dev'
-        path: metamod-source
-        submodules: true
+        ref: 1.12-dev
+        path: mmsource
+        submodules: recursive
 
-    # 5. Checkout SourceMod
+    # 5️⃣ Checkout SourceMod
     - name: Checkout SourceMod
       uses: actions/checkout@v4
       with:
         repository: alliedmodders/sourcemod
-        ref: '1.12-dev'
+        ref: 1.12-dev
         path: sourcemod
-        submodules: true
+        submodules: recursive
 
-    # 6. Configure and Build
+    # 6️⃣ Configure & Build
     - name: Configure and Compile
       working-directory: extension
       run: |
-        mkdir -p build
+        mkdir build
         cd build
 
+        echo "=== Directory Structure ==="
+        ls -la ..
+        ls -la ../mmsource
+        ls -la ../sourcemod
+
         echo "=== Configuring AMBuild ==="
-        # Use RELATIVE paths to avoid container path issues
-        python3 ../configure.py \
-          --enable-optimize \
-          --sm-path=../sourcemod \
-          --mms-path=../metamod-source
+        python3 ../configure.py --enable-optimize
 
         echo "=== Running AMBuild ==="
         ambuild
 
-    # 7. Upload artifacts
+    # 7️⃣ Upload artifacts
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
@@ -88,64 +86,61 @@ jobs:
 
 
   # ==========================================
-  # WINDOWS BUILD JOB
+  # WINDOWS BUILD
   # ==========================================
   build-windows:
     name: Build on Windows
-    runs-on: windows-latest
+    runs-on: windows-2022
 
     steps:
-    # 1. Checkout extension source
     - name: Checkout Extension Source
       uses: actions/checkout@v4
 
-    # 2. Setup Python
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.10'
 
-    # 3. Install AMBuild
     - name: Install AMBuild
       run: |
         python -m pip install --upgrade pip setuptools wheel
         pip install git+https://github.com/alliedmodders/ambuild
 
-    # 4. Checkout Metamod:Source
+    # IMPORTANT: folder name MUST be mmsource
     - name: Checkout Metamod:Source
       uses: actions/checkout@v4
       with:
         repository: alliedmodders/metamod-source
-        ref: '1.12-dev'
-        path: metamod-source
-        submodules: true
+        ref: 1.12-dev
+        path: mmsource
+        submodules: recursive
 
-    # 5. Checkout SourceMod
     - name: Checkout SourceMod
       uses: actions/checkout@v4
       with:
         repository: alliedmodders/sourcemod
-        ref: '1.12-dev'
+        ref: 1.12-dev
         path: sourcemod
-        submodules: true
+        submodules: recursive
 
-    # 6. Configure and Build
     - name: Configure and Compile
       working-directory: extension
+      shell: pwsh
       run: |
         mkdir build
         cd build
 
-        echo "=== Configuring AMBuild ==="
-        python ../configure.py `
-          --enable-optimize `
-          --sm-path=..\sourcemod `
-          --mms-path=..\metamod-source
+        Write-Host "=== Directory Structure ==="
+        Get-ChildItem ..
+        Get-ChildItem ../mmsource
+        Get-ChildItem ../sourcemod
 
-        echo "=== Running AMBuild ==="
+        Write-Host "=== Configuring AMBuild ==="
+        python ../configure.py --enable-optimize
+
+        Write-Host "=== Running AMBuild ==="
         ambuild
 
-    # 7. Upload artifacts
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
