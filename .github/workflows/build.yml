@@ -1,0 +1,82 @@
+name: Build Signal Extension
+
+# 当推送到 main/master 分支，或者手动触发时执行此流程
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    # 使用矩阵策略，同时启动 Windows 和 Linux 服务器
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+    # 1. 获取你的扩展源代码
+    - name: Checkout Extension Source
+      uses: actions/checkout@v4
+
+    # 2. 安装 Python (AMBuild 的运行环境)
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    # 3. 安装 AMBuild 工具
+    - name: Install AMBuild
+      run: |
+        python -m pip install --upgrade pip setuptools wheel
+        pip install git+https://github.com/alliedmodders/ambuild
+
+    # 4. 下载 Metamod:Source 源码依赖 (存放在根目录)
+    - name: Checkout Metamod:Source
+      uses: actions/checkout@v4
+      with:
+        repository: alliedmodders/metamod-source
+        ref: '1.12-dev'  # <--- 在这里指定分支或 Tag
+        path: metamod-source
+        submodules: true
+
+    # 5. 下载 SourceMod 源码依赖 (存放在根目录)
+    - name: Checkout SourceMod
+      uses: actions/checkout@v4
+      with:
+        repository: alliedmodders/sourcemod
+        ref: '1.12-dev'  # <--- 在这里指定分支或 Tag
+        path: sourcemod
+        submodules: true
+        
+    # 6. (仅限 Linux) 安装 32 位编译依赖库
+    # 即使我们要编译 64 位，也需要保留这些以支持 x86 架构的交叉编译
+    - name: Install Linux 32-bit Dependencies
+      if: runner.os == 'Linux'
+      run: |
+        sudo dpkg --add-architecture i386
+        sudo apt-get update
+        sudo apt-get install -y gcc-multilib g++-multilib linux-libc-dev:i386
+
+    # 7. 配置 AMBuild 项目
+    # 指定运行目录，并通过逗号分隔同时启用 x86 和 x86_64
+    - name: Configure AMBuild
+      working-directory: signal/extension
+      run: |
+        python configure.py --enable-optimize --targets=x86,x86_64 --sm-path="${{ github.workspace }}/sourcemod" --mms-path="${{ github.workspace }}/metamod-source"
+
+    # 8. 执行编译
+    - name: Compile
+      working-directory: signal/extension
+      run: ambuild
+
+    # 9. 收集打包好的文件并上传为 Artifact
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: signal-extension-${{ runner.os }}-x86-x64
+        # 精确指定打包产物的存放路径
+        path: signal/extension/package/
