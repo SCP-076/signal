@@ -24,6 +24,7 @@ jobs:
     # Git is required for the checkout step, and gcc/g++ are required for compilation
     - name: Install Build Dependencies
       run: |
+        dpkg --add-architecture i386
         apt-get update
         apt-get install -y git python3 python3-pip gcc-multilib g++-multilib linux-libc-dev:i386
 
