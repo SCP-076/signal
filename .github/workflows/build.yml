@@ -56,23 +56,20 @@ jobs:
         path: sourcemod
         submodules: true
 
-    # 6-7. Configure AMBuild project (Force standalone build folder)
+    # 6-7. Configure AMBuild project and Compile (Dual fallback for paths)
     - name: Configure and Compile
       working-directory: extension
+      env:
+        # Environment variables act as the ultimate fallback for AMBuild if arguments fail
+        SM_PATH: ${{ github.workspace }}/sourcemod
+        MMS_PATH: ${{ github.workspace }}/metamod-source
       run: |
         mkdir -p build
         cd build
 
         echo "=== Configuring AMBuild ==="
-        python3 ../configure.py --enable-optimize --sm-path="${{ github.workspace }}/sourcemod" --mms-path="${{ github.workspace }}/metamod-source"
-
-        echo "=== Check Directory Contents ==="
-        ls -la
-        
-        if [ ! -d ".ambuild2" ]; then
-          echo "ERROR: .ambuild2 is missing in the build/ directory! Checking parent directory..."
-          ls -la ../
-        fi
+        # Using underscore parameters (--sm_path and --mms_path) to ensure compatibility
+        python3 ../configure.py --enable-optimize --sm_path="${{ github.workspace }}/sourcemod" --mms_path="${{ github.workspace }}/metamod-source"
 
         echo "=== Running AMBuild ==="
         ambuild
@@ -128,18 +125,23 @@ jobs:
         path: sourcemod
         submodules: true
 
-    # 6. Configure AMBuild project (Force standalone build folder)
-    - name: Configure AMBuild
+    # 6-7. Configure AMBuild project and Compile (Dual fallback for paths)
+    - name: Configure and Compile
       working-directory: extension
+      env:
+        # Environment variables act as the ultimate fallback for AMBuild if arguments fail
+        SM_PATH: ${{ github.workspace }}\sourcemod
+        MMS_PATH: ${{ github.workspace }}\metamod-source
       run: |
         mkdir build
         cd build
-        python ../configure.py --enable-optimize --targets=x86,x86_64 --sm-path="${{ github.workspace }}/sourcemod" --mms-path="${{ github.workspace }}/metamod-source"
+        
+        echo "=== Configuring AMBuild ==="
+        # Using underscore parameters (--sm_path and --mms_path) for Windows compatibility
+        python ../configure.py --enable-optimize --sm_path="${{ github.workspace }}\sourcemod" --mms_path="${{ github.workspace }}\metamod-source"
 
-    # 7. Execute compilation
-    - name: Compile
-      working-directory: extension/build
-      run: ambuild
+        echo "=== Running AMBuild ==="
+        ambuild
 
     # 8. Collect compiled files and upload as Artifact
     - name: Upload Artifacts
