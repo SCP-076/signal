@@ -15,7 +15,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        # 将 ubuntu-latest 改为 ubuntu-20.04 以降低 glibc 版本要求
+        os: [ubuntu-20.04, windows-latest]
 
     steps:
     # 1. 获取你的扩展源代码

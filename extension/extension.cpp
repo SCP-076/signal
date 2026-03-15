@@ -53,7 +53,7 @@ SMEXT_LINK(&g_Sample);
 #define MAX_LEN_SIGNAL_SLOT 32
 
 // ======================================================================
-// 1. 内存映射结构体 (与 V2 确保严格 72 字节对齐)
+// 1. 内存映射结构体 (与 inc 确保严格 72 字节对齐)
 // ======================================================================
 struct Cpp_SignalSlot {
     cell_t global;       // 偏移: 0 bytes
@@ -69,7 +69,6 @@ static_assert(sizeof(Cpp_SignalSlot) == 72, "Cpp_SignalSlot size mismatch! Check
 struct SlotInfo {
     IPluginFunction* func;
     int priority;
-    std::string slot_name; // 记录槽函数名用于控制台Dump打印
 
     bool operator<(const SlotInfo& other) const {
         return priority > other.priority;
@@ -77,13 +76,13 @@ struct SlotInfo {
 };
 
 struct SignalGroup {
-    std::string signal_name; // 记录信号名用于Dump打印及报错提示
+    std::string signal_name;
     std::vector<SlotInfo> slots;
 };
 
 struct PluginSignalContainer {
-    std::string plugin_name; // 记录插件名称
-    std::unordered_map<cell_t*, SignalGroup> signals;// 使用 cell_t* (信号 pubvar 的物理内存地址) 作为 O(1) 匹配的哈希键
+    std::string plugin_name; 
+    std::unordered_map<cell_t*, SignalGroup> signals;// 使用 信号 pubvar 的物理内存地址 作为 O(1) 匹配的哈希键
 };
 
 std::unordered_map<IPluginContext*, PluginSignalContainer> g_PluginSignals;
@@ -91,9 +90,9 @@ std::unordered_map<IPluginContext*, PluginSignalContainer> g_PluginSignals;
 enum EmitSignalFlag
 {
     ES_None = 0,
-    ES_RequireSlot = (1 << 1),
-    ES_FailOnError = (1 << 2),
-    ES_StopOnHandled = (1 << 3)
+    ES_RequireSlot = (1 << 0),
+    ES_FailOnError = (1 << 1),
+    ES_StopOnHandled = (1 << 2)
 };
 
 // ======================================================================
@@ -219,14 +218,11 @@ public:
             {
                 Cpp_SignalSlot* slot_data = reinterpret_cast<Cpp_SignalSlot*>(pubvar->offs);
 
-                // ==========================================
-                // 第一时间截断并提取安全字符串
-                // 使用 strnlen 防止无 \0 导致的内存越界读取
-                // ==========================================
+                // 提取安全字符串用于查找和报错
                 std::string safe_slot_name(slot_data->slot, strnlen(slot_data->slot, MAX_LEN_SIGNAL_SLOT));
                 std::string safe_signal_name(slot_data->signal, strnlen(slot_data->signal, MAX_LEN_SIGNAL_NAME));
 
-                // 1. 获取并检查槽函数是否存在 (使用安全的 .c_str())
+                // 1. 获取并检查槽函数是否存在
                 IPluginFunction* func = context->GetFunctionByName(safe_slot_name.c_str());
                 if (!func)
                 {
@@ -240,7 +236,7 @@ public:
                     return;
                 }
 
-                // 2. 根据记录的 signal 字符串获取目标信号的物理地址 (使用安全的 .c_str())
+                // 2. 根据记录的 signal 字符串获取目标信号的物理地址
                 uint32_t sig_pubvar_idx;
                 if (context->FindPubvarByName(safe_signal_name.c_str(), &sig_pubvar_idx) != SP_ERROR_NONE)
                 {
@@ -258,18 +254,17 @@ public:
                 context->GetPubvarByIndex(sig_pubvar_idx, &sig_pubvar);
                 cell_t* sig_phys_addr = sig_pubvar->offs;
 
-                // 3. 将槽函数信息按物理地址进行归类
+                // 3. 将槽函数信息按物理地址进行归类（此时不再存储 safe_slot_name）
                 auto sig_it = container.signals.find(sig_phys_addr);
                 if (sig_it != container.signals.end())
                 {
-                    // 直接使用安全的 std::string 对象
-                    sig_it->second.slots.push_back({ func, slot_data->priority, safe_slot_name });
+                    sig_it->second.slots.push_back({ func, slot_data->priority }); // 修改点
                 }
                 else
                 {
                     SignalGroup group;
-                    group.signal_name = safe_signal_name; // 直接赋值安全的 std::string
-                    group.slots.push_back({ func, slot_data->priority, safe_slot_name });
+                    group.signal_name = safe_signal_name;
+                    group.slots.push_back({ func, slot_data->priority }); // 修改点
                     container.signals[sig_phys_addr] = std::move(group);
                 }
             }
@@ -310,16 +305,13 @@ SignalSlotManager g_SignalSlotManager;
 class DumpSignalCommand : public IRootConsoleCommand
 {
 public:
-    // 继承并实现触发时的回调
     void OnRootConsoleCommand(const char* cmdname, const ICommandArgs* command) override
     {
-        // 1. 获取插件名参数
         const char* target_plugin = nullptr;
         if (command->ArgC() >= 3) {
             target_plugin = command->Arg(2);
         }
 
-        // 2. 根据是否有参数打印不同的表头
         if (target_plugin) {
             rootconsole->ConsolePrint("Dumping active signals and slots in execution order for plugin: %s", target_plugin);
         }
@@ -327,7 +319,6 @@ public:
             rootconsole->ConsolePrint("Dumping active signals and slots in execution order:");
         }
 
-        // 3. 判空拦截
         if (g_PluginSignals.empty()) {
             rootconsole->ConsolePrint("  No active signals found.");
             return;
@@ -335,20 +326,15 @@ public:
 
         bool found_any = false;
 
-        // 4. 遍历并过滤
         for (const auto& plugin_pair : g_PluginSignals) {
             std::string current_plugin_name = plugin_pair.second.plugin_name;
 
-            // 如果用户传入了参数，则进行过滤
             if (target_plugin != nullptr) {
-                // 使用 std::string::find 进行子串匹配（区分大小写）
-                // 这样输入 "aaa" 就能匹配 "aaa.smx"
                 if (current_plugin_name.find(target_plugin) == std::string::npos) {
-                    continue; // 没匹配上，直接跳过当前插件
+                    continue;
                 }
             }
 
-            // 匹配成功或未要求过滤，执行打印
             found_any = true;
             rootconsole->ConsolePrint("--------------------------------------------------------");
             rootconsole->ConsolePrint("Plugin: %s", current_plugin_name.c_str());
@@ -357,12 +343,12 @@ public:
                 rootconsole->ConsolePrint("  Signal: %s (Address: %p)", sig_pair.second.signal_name.c_str(), sig_pair.first);
 
                 for (const auto& slot : sig_pair.second.slots) {
-                    rootconsole->ConsolePrint("    -> Slot: %s [Priority: %d]", slot.slot_name.c_str(), slot.priority);
+                    // 修改点：在此处直接调用 slot.func->DebugName() 获取函数名
+                    rootconsole->ConsolePrint("    -> Slot: %s [Priority: %d]", slot.func->DebugName(), slot.priority);
                 }
             }
         }
 
-        // 5. 过滤后如果没有结果，给予提示
         if (target_plugin != nullptr && !found_any) {
             rootconsole->ConsolePrint("  No active signals found for plugin matching '%s'.", target_plugin);
         }
