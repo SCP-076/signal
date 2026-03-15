@@ -14,72 +14,76 @@ jobs:
   # ==========================================
   build-linux:
     name: Build on Linux (Ubuntu 20.04)
-    # Use the latest runner, but execute everything inside an older Ubuntu 20.04 container for glibc compatibility
     runs-on: ubuntu-latest
+
+    # Run everything inside Ubuntu 20.04 container (for glibc compatibility)
     container:
       image: ubuntu:20.04
 
     steps:
-    # 1. Install necessary packages inside the raw Ubuntu 20.04 container
-    # Enable i386 architecture first, then install git, python, and 32/64-bit C++ compilers
+    # 1. Install required dependencies inside container
     - name: Install Build Dependencies
       run: |
         dpkg --add-architecture i386
         apt-get update
-        apt-get install -y git python3 python3-pip gcc-multilib g++-multilib linux-libc-dev:i386
+        apt-get install -y \
+          git \
+          python3 \
+          python3-pip \
+          gcc-multilib \
+          g++-multilib \
+          linux-libc-dev:i386
 
-    # 2. Checkout the extension source code
+    # 2. Checkout extension source
     - name: Checkout Extension Source
       uses: actions/checkout@v4
 
-    # 3. Install AMBuild tool
+    # 3. Install AMBuild
     - name: Install AMBuild
       run: |
         python3 -m pip install --upgrade pip setuptools wheel
         python3 -m pip install git+https://github.com/alliedmodders/ambuild
 
-    # 4. Checkout Metamod:Source (Root directory)
+    # 4. Checkout Metamod:Source
     - name: Checkout Metamod:Source
       uses: actions/checkout@v4
       with:
         repository: alliedmodders/metamod-source
-        ref: '1.12-dev'  # <--- Specify branch or tag here
+        ref: '1.12-dev'
         path: metamod-source
         submodules: true
 
-    # 5. Checkout SourceMod (Root directory)
+    # 5. Checkout SourceMod
     - name: Checkout SourceMod
       uses: actions/checkout@v4
       with:
         repository: alliedmodders/sourcemod
-        ref: '1.12-dev'  # <--- Specify branch or tag here
+        ref: '1.12-dev'
         path: sourcemod
         submodules: true
 
-    # 6-7. Configure AMBuild project and Compile (Dual fallback for paths)
+    # 6. Configure and Build
     - name: Configure and Compile
       working-directory: extension
-      env:
-        # Environment variables act as the ultimate fallback for AMBuild if arguments are not parsed properly
-        SM_PATH: ${{ github.workspace }}/sourcemod
-        MMS_PATH: ${{ github.workspace }}/metamod-source
       run: |
         mkdir -p build
         cd build
 
         echo "=== Configuring AMBuild ==="
-        # Use dashes (--sm-path and --mms-path) for argparse compatibility
-        python3 ../configure.py --enable-optimize --sm-path="${{ github.workspace }}/sourcemod" --mms-path="${{ github.workspace }}/metamod-source"
+        # Use RELATIVE paths to avoid container path issues
+        python3 ../configure.py \
+          --enable-optimize \
+          --sm-path=../sourcemod \
+          --mms-path=../metamod-source
 
         echo "=== Running AMBuild ==="
         ambuild
 
-    # 8. Collect compiled files and upload as Artifact
+    # 7. Upload artifacts
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
         name: signal-extension-Linux-x86-x64
-        # Precisely specify the path of the packaged artifacts
         path: extension/build/package/
 
 
@@ -91,62 +95,59 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    # 1. Checkout the extension source code
+    # 1. Checkout extension source
     - name: Checkout Extension Source
       uses: actions/checkout@v4
 
-    # 2. Setup Python (AMBuild runtime environment)
+    # 2. Setup Python
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.10'
 
-    # 3. Install AMBuild tool
+    # 3. Install AMBuild
     - name: Install AMBuild
       run: |
         python -m pip install --upgrade pip setuptools wheel
         pip install git+https://github.com/alliedmodders/ambuild
 
-    # 4. Checkout Metamod:Source (Root directory)
+    # 4. Checkout Metamod:Source
     - name: Checkout Metamod:Source
       uses: actions/checkout@v4
       with:
         repository: alliedmodders/metamod-source
-        ref: '1.12-dev'  # <--- Specify branch or tag here
+        ref: '1.12-dev'
         path: metamod-source
         submodules: true
 
-    # 5. Checkout SourceMod (Root directory)
+    # 5. Checkout SourceMod
     - name: Checkout SourceMod
       uses: actions/checkout@v4
       with:
         repository: alliedmodders/sourcemod
-        ref: '1.12-dev'  # <--- Specify branch or tag here
+        ref: '1.12-dev'
         path: sourcemod
         submodules: true
 
-    # 6-7. Configure AMBuild project and Compile (Dual fallback for paths)
+    # 6. Configure and Build
     - name: Configure and Compile
       working-directory: extension
-      env:
-        # Environment variables act as the ultimate fallback for AMBuild if arguments are not parsed properly
-        SM_PATH: ${{ github.workspace }}\sourcemod
-        MMS_PATH: ${{ github.workspace }}\metamod-source
       run: |
         mkdir build
         cd build
-        
+
         echo "=== Configuring AMBuild ==="
-        # Use dashes (--sm-path and --mms-path) for argparse compatibility
-        python ../configure.py --enable-optimize --sm-path="${{ github.workspace }}\sourcemod" --mms-path="${{ github.workspace }}\metamod-source"
+        python ../configure.py `
+          --enable-optimize `
+          --sm-path=..\sourcemod `
+          --mms-path=..\metamod-source
 
         echo "=== Running AMBuild ==="
         ambuild
 
-    # 8. Collect compiled files and upload as Artifact
+    # 7. Upload artifacts
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
         name: signal-extension-Windows-x86-x64
-        # Precisely specify the path of the packaged artifacts
         path: extension/build/package/
