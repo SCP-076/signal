@@ -41,6 +41,31 @@ public void OnPluginStart()
 }
 ```
 
+A step further:
+```sourcepawn
+SIG(SignalPluginStart)
+
+//Further abstraction
+#define PluginStart(%1) CONNECT_SIG(OnPluginStart_%1,SignalPluginStart) public void OnPluginStart_%1()
+
+
+PluginStart(ModuleA)
+{
+
+}
+
+PluginStart(ModuleB)
+{
+
+}
+
+PluginStart(ModuleC)
+{
+
+}
+
+```
+
 ## 2. Passing Parameters & Handling Action Returns
 Signals can pass a single parameter payload and connect to slot functions that return an Action. When emitted, the signal will return the highest Action value across all executed slots.
 
@@ -87,5 +112,5 @@ CONNECT_SIG(FuncC, AnySignal)                       // Default macro assigns a p
 
 ## Important Notes & Limitations
 
-* **`public` Functions Only:** Signals can only be connected to `public` functions. `methodmap` methods are strictly unsupported.
+* **Public Functions Only:** Signals can only be connected to `public` functions. `methodmap` methods are strictly unsupported.
 * **Safety Checks:** The provided macros perform automatic type-checking during compilation and will throw syntax errors if signatures do not match. While the compiler cannot verify if a connected function is actually marked as `public`, the extension securely handles this by detecting invalid bindings during the load phase and preventing the plugin from running.
