@@ -49,11 +49,37 @@ Sample g_Sample;		/**< Global singleton for extension's main interface */
 
 SMEXT_LINK(&g_Sample);
 
+// ======================================================================
+// [WARNING] DANGEROUS VTABLE HACK 
+// ======================================================================
+// The following SMPlugin interface is an internal SourceMod class copied 
+// from bridge/include/IScriptManager.h to access the EvictWithError method.
+// 
+// If SourceMod ever changes the virtual function layout (vtable) of SMPlugin 
+// in a future update (e.g., adding/removing virtual functions above EvictWithError), 
+// this extension WILL CAUSE SERVER CRASHES and must be updated to match the new layout!
+// ======================================================================
+class AutoConfig; 
+
+class SMPlugin : public SourceMod::IPlugin
+{
+public:
+    virtual size_t GetConfigCount() = 0;
+    virtual AutoConfig* GetConfig(size_t i) = 0;
+    virtual void AddLibrary(const char* name) = 0;
+    virtual void AddConfig(bool create, const char* cfg, const char* folder) = 0;
+    virtual void EvictWithError(SourceMod::PluginStatus status, const char* fmt, ...) = 0;
+};
+
+
+
+// ======================================================================
+// ======================================================================
 #define MAX_LEN_SIGNAL_NAME 32
 #define MAX_LEN_SIGNAL_SLOT 32
 
 // ======================================================================
-// 1. Memory-mapped structure (Ensure strict alignment with inc)
+//  Memory-mapped structure (Ensure strict alignment with inc)
 // ======================================================================
 struct Cpp_SignalSlot {
     cell_t global;       // Offset: 0 bytes
@@ -63,8 +89,10 @@ struct Cpp_SignalSlot {
 };
 static_assert(sizeof(Cpp_SignalSlot) == 72, "Cpp_SignalSlot size mismatch! Check struct padding.");
 
+
+
 // ======================================================================
-// 2. Core Data Containers and Control Flags
+//  Core Data Containers and Control Flags
 // ======================================================================
 struct SlotInfo {
     IPluginFunction* func;
@@ -96,7 +124,7 @@ enum EmitSignalFlag
 };
 
 // ======================================================================
-// 3. Native Function Implementations
+//  Natives
 // ======================================================================
 cell_t EmitSignal_Native(IPluginContext* pContext, const cell_t* params)
 {
@@ -106,7 +134,6 @@ cell_t EmitSignal_Native(IPluginContext* pContext, const cell_t* params)
 
     int flags = params[3];
 
-    // Convert the provided local signal address to the plugin's physical memory address
     cell_t* phys_addr;
     if (pContext->LocalToPhysAddr(params[1], &phys_addr) != SP_ERROR_NONE) {
         return pContext->ThrowNativeError("Invalid signal address provided.");
@@ -174,13 +201,13 @@ cell_t GetSignalSlotCount_Native(IPluginContext* pContext, const cell_t* params)
         return pContext->ThrowNativeError("Invalid signal address provided.");
     }
 
-    // Look up the signal container for the current plugin
+  
     auto it = g_PluginSignals.find(pContext);
     if (it == g_PluginSignals.end()) {
         return 0;
     }
 
-    // O(1) match physical address to find the slot list for this signal
+
     auto sig_it = it->second.signals.find(phys_addr);
     if (sig_it == it->second.signals.end()) {
         return 0;
@@ -190,7 +217,7 @@ cell_t GetSignalSlotCount_Native(IPluginContext* pContext, const cell_t* params)
 }
 
 // ======================================================================
-// 4. Plugin Lifecycle Manager (Parsing, Validation, and Interception)
+//  Plugin Lifecycle Manager (Parsing, Validation, and Interception)
 // ======================================================================
 class SignalSlotManager : public IPluginsListener
 {
@@ -226,13 +253,12 @@ public:
                 IPluginFunction* func = context->GetFunctionByName(safe_slot_name.c_str());
                 if (!func)
                 {
-                    context->ReportFatalError(
-                        "'%s' failed to find function '%s' (connect signal: '%s'). Need 'public' modifier!",
+                    SMPlugin* sm_plugin = reinterpret_cast<SMPlugin*>(plugin);
+                    sm_plugin->EvictWithError(Plugin_Error,
+                        "'%s' failed to find public function '%s'.(Need add 'public' modifier!)",
                         plugin->GetFilename(),
-                        safe_slot_name.c_str(),
-                        safe_signal_name.c_str()
+                        safe_slot_name.c_str()
                     );
-                    UnloadTargetPlugin(plugin);
                     return;
                 }
 
@@ -240,13 +266,13 @@ public:
                 uint32_t sig_pubvar_idx;
                 if (context->FindPubvarByName(safe_signal_name.c_str(), &sig_pubvar_idx) != SP_ERROR_NONE)
                 {
-                    context->ReportFatalError(
+                    SMPlugin* sm_plugin = reinterpret_cast<SMPlugin*>(plugin);
+                    sm_plugin->EvictWithError(Plugin_Error,
                         "'%s' failed to find signal '%s'. Ensure SIG(%s) is defined!",
                         plugin->GetFilename(),
                         safe_signal_name.c_str(),
                         safe_signal_name.c_str()
                     );
-                    UnloadTargetPlugin(plugin);
                     return;
                 }
 
@@ -280,19 +306,12 @@ public:
         }
     }
 
+    // Clear the signal cache as late as possible to prevent any lingering forwards in the plugin from using signals.
     void OnPluginDestroyed(IPlugin* plugin) override
     {
         if (plugin->GetBaseContext()) {
             g_PluginSignals.erase(plugin->GetBaseContext());
         }
-    }
-
-private:
-    void UnloadTargetPlugin(IPlugin* plugin)
-    {
-        char cmd[256];
-        snprintf(cmd, sizeof(cmd), "sm plugins unload %s\n", plugin->GetFilename());
-        gamehelpers->ServerCommand(cmd);
     }
 };
 
@@ -355,7 +374,7 @@ public:
 }g_DumpSignalCmd;
 
 // ======================================================================
-// 5. Registration List and Lifecycle
+//  Registration and Lifecycle
 // ======================================================================
 
 static const sp_nativeinfo_t MyNatives[] =
@@ -389,9 +408,6 @@ void ShutdownSignalSlotSystem()
     g_PluginSignals.clear();
 }
 
-// ======================================================================
-// 6. SourceMod Extension Lifecycle Callbacks
-// ======================================================================
 
 bool Sample::SDK_OnLoad(char* error, size_t maxlength, bool late)
 {
