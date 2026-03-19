@@ -116,6 +116,32 @@ native int GetSignalSlotCount(Signal signal);
 
 
 
+
+/**
+ * Emitted automatically after all signals and slots within the plugin have 
+ * been loaded and wired.
+ *
+ * This signal triggers earlier than OnPluginStart(). At this execution stage, 
+ * some core SourceMod and module natives are available to be called. However, 
+ * many other subsystems (such as global forwards) are not guaranteed to be 
+ * fully initialized yet.
+ *
+ * It is primarily intended for modular include files (.inc) to perform very 
+ * limited, early setup operations before the main OnPluginStart() routine 
+ * executes (e.g., initializing internal variables or offsets based on the 
+ * specific game).
+ *
+ * @note            This is a restricted, private signal emitted internally 
+ * by the extension. Manual emission is prohibited.
+ *
+ * @note            If any run-time error is thrown during this callback, 
+ * the plugin will be marked as failed.
+ */
+SIG(OnAllSignalsLoaded)
+
+
+
+
 /**
  * Do not edit below this line!
  */

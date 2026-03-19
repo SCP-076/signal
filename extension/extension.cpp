@@ -35,6 +35,7 @@
 #include <string>
 #include <algorithm>
 #include <cstring>
+#include <cctype>
 #include <IRootConsoleMenu.h>
 
 using namespace SourceMod;
@@ -59,7 +60,7 @@ SMEXT_LINK(&g_Sample);
 // in a future update (e.g., adding/removing virtual functions above EvictWithError), 
 // this extension WILL CAUSE SERVER CRASHES and must be updated to match the new layout!
 // ======================================================================
-class AutoConfig; 
+class AutoConfig;
 
 class SMPlugin : public SourceMod::IPlugin
 {
@@ -106,6 +107,7 @@ struct SlotInfo {
 struct SignalGroup {
     std::string signal_name;
     std::vector<SlotInfo> slots;
+    bool is_private = false; // Flag for extension-exclusive signals (e.g., OnAllSignalsLoaded)
 };
 
 struct PluginSignalContainer {
@@ -124,6 +126,61 @@ enum EmitSignalFlag
 };
 
 // ======================================================================
+// ======================================================================
+
+static void TrimWhitespace(std::string& str) {
+    // Trim left
+    str.erase(str.begin(), std::find_if(str.begin(), str.end(), [](unsigned char ch) {
+        return !std::isspace(ch);
+        }));
+    // Trim right
+    str.erase(std::find_if(str.rbegin(), str.rend(), [](unsigned char ch) {
+        return !std::isspace(ch);
+        }).base(), str.end());
+}
+
+
+// Returns SP_ERROR_NONE (0) on full success. 
+// If internal_abort_on_error is true, or ES_FailOnError is set, it will 
+// return the error code immediately upon the first failing slot.
+static int ExecuteSignalGroup(const SignalGroup& group, cell_t data, int flags, cell_t& max_result, bool internal_abort_on_error = false)
+{
+    max_result = 0;
+    bool has_executed = false;
+    bool stop_on_handled = (flags & ES_StopOnHandled) != 0;
+    bool native_fail_on_error = (flags & ES_FailOnError) != 0;
+
+    for (const SlotInfo& slot : group.slots)
+    {
+        slot.func->PushCell(data);
+
+        cell_t result = 0;
+        int err = slot.func->Execute(&result);
+
+        if (err == SP_ERROR_NONE)
+        {
+            if (!has_executed || result > max_result) {
+                max_result = result;
+                has_executed = true;
+            }
+
+            if (stop_on_handled && max_result >= 3) {
+                break;
+            }
+        }
+        else
+        {
+            // SourceMod VM automatically logs the stack trace to the server console.
+            // We just need to decide whether to abort the remaining slots loop.
+            if (internal_abort_on_error || native_fail_on_error) {
+                return err; // Silent fail at the C++ loop level, let caller handle reporting.
+            }
+        }
+    }
+    return SP_ERROR_NONE;
+}
+
+// ======================================================================
 //  Natives
 // ======================================================================
 cell_t EmitSignal_Native(IPluginContext* pContext, const cell_t* params)
@@ -139,7 +196,6 @@ cell_t EmitSignal_Native(IPluginContext* pContext, const cell_t* params)
         return pContext->ThrowNativeError("Invalid signal address provided.");
     }
 
-    // Look up the signal container for the current plugin
     auto it = g_PluginSignals.find(pContext);
     if (it == g_PluginSignals.end()) {
         if (flags & ES_RequireSlot) {
@@ -148,7 +204,7 @@ cell_t EmitSignal_Native(IPluginContext* pContext, const cell_t* params)
         return 0;
     }
 
-    // O(1) fast matching using physical address
+
     auto sig_it = it->second.signals.find(phys_addr);
 
     if (sig_it == it->second.signals.end() || sig_it->second.slots.empty()) {
@@ -158,34 +214,19 @@ cell_t EmitSignal_Native(IPluginContext* pContext, const cell_t* params)
         return 0;
     }
 
+    if (sig_it->second.is_private) {
+        return pContext->ThrowNativeError("Permission denied: Signal '%s' is restricted and can only be emitted internally by the extension.", sig_it->second.signal_name.c_str());
+    }
+
     cell_t max_result = 0;
-    bool has_executed = false;
     cell_t data = params[2];
 
-    for (const SlotInfo& slot : sig_it->second.slots)
-    {
-        slot.func->PushCell(data);
+    // Standard Native Emit: Do not force internal abort, rely solely on Pawn flags.
+    int err = ExecuteSignalGroup(sig_it->second, data, flags, max_result, false);
 
-        cell_t result = 0;
-        int err = slot.func->Execute(&result);
-
-        if (err == SP_ERROR_NONE)
-        {
-            if (!has_executed || result > max_result) {
-                max_result = result;
-                has_executed = true;
-            }
-
-            if ((flags & ES_StopOnHandled) && max_result >= 3) {
-                break;
-            }
-        }
-        else
-        {
-            if (flags & ES_FailOnError) {
-                return pContext->ThrowNativeError("ES_FailOnError: stop emit signal '%s'.", sig_it->second.signal_name.c_str());
-            }
-        }
+    // Only throw Native Error if the pawn-level ES_FailOnError flag was explicitly requested
+    if (err != SP_ERROR_NONE && (flags & ES_FailOnError)) {
+        return pContext->ThrowNativeError("ES_FailOnError: stop emit signal '%s'.", sig_it->second.signal_name.c_str());
     }
 
     return max_result;
@@ -201,7 +242,7 @@ cell_t GetSignalSlotCount_Native(IPluginContext* pContext, const cell_t* params)
         return pContext->ThrowNativeError("Invalid signal address provided.");
     }
 
-  
+
     auto it = g_PluginSignals.find(pContext);
     if (it == g_PluginSignals.end()) {
         return 0;
@@ -232,12 +273,14 @@ public:
 
         uint32_t check_idx;
         if (context->FindPubvarByName("__include_signal__", &check_idx) != SP_ERROR_NONE) {
-            return; // Skip if the activation identifier is not present
+            return;
         }
 
         PluginSignalContainer container;
         container.plugin_name = plugin->GetFilename();
         sp_pubvar_t* pubvar;
+
+        cell_t* on_all_loaded_addr = nullptr;
 
         for (uint32_t i = 0; context->GetPubvarByIndex(i, &pubvar) == SP_ERROR_NONE; i++)
         {
@@ -248,6 +291,10 @@ public:
                 // Extract safe strings for lookup and error reporting
                 std::string safe_slot_name(slot_data->slot, strnlen(slot_data->slot, MAX_LEN_SIGNAL_SLOT));
                 std::string safe_signal_name(slot_data->signal, strnlen(slot_data->signal, MAX_LEN_SIGNAL_NAME));
+
+                // Trim any accidental whitespace introduced by macro stringification
+                TrimWhitespace(safe_slot_name);
+                TrimWhitespace(safe_signal_name);
 
                 // 1. Retrieve and verify the existence of the slot function
                 IPluginFunction* func = context->GetFunctionByName(safe_slot_name.c_str());
@@ -280,6 +327,7 @@ public:
                 context->GetPubvarByIndex(sig_pubvar_idx, &sig_pubvar);
                 cell_t* sig_phys_addr = sig_pubvar->offs;
 
+          
                 // 3. Group slot function information by physical address
                 auto sig_it = container.signals.find(sig_phys_addr);
                 if (sig_it != container.signals.end())
@@ -288,8 +336,13 @@ public:
                 }
                 else
                 {
+                    if (safe_signal_name == "OnAllSignalsLoaded") {
+                        on_all_loaded_addr = sig_phys_addr;
+                    }
+
                     SignalGroup group;
                     group.signal_name = safe_signal_name;
+                    group.is_private = (safe_signal_name == "OnAllSignalsLoaded");
                     group.slots.push_back({ func, slot_data->priority });
                     container.signals[sig_phys_addr] = std::move(group);
                 }
@@ -301,8 +354,34 @@ public:
             std::sort(pair.second.slots.begin(), pair.second.slots.end());
         }
 
-        if (!container.signals.empty()) {
-            g_PluginSignals[context] = std::move(container);
+        if (container.signals.empty())
+        {
+            return;
+        }
+
+        g_PluginSignals[context] = std::move(container);
+        // Fire the OnAllSignalsLoaded signal automatically if connected
+        if (on_all_loaded_addr != nullptr) {
+            auto sig_it = g_PluginSignals[context].signals.find(on_all_loaded_addr);
+            if (sig_it != g_PluginSignals[context].signals.end()) {
+                cell_t dummy_result = 0;
+
+                // Use ES_None for standard flags, but set internal_abort_on_error = true
+                // This creates a "silent fail" at the ExecuteSignalGroup level that we handle below.
+                int err = ExecuteSignalGroup(sig_it->second, 0, ES_None, dummy_result, true);
+
+                if (err != SP_ERROR_NONE) {
+                    SMPlugin* sm_plugin = reinterpret_cast<SMPlugin*>(plugin);
+                    sm_plugin->EvictWithError(Plugin_Error,
+                        "'%s' failed during initialization: Error executing slot for signal '%s'.",
+                        plugin->GetFilename(),
+                        sig_it->second.signal_name.c_str()
+                    );
+
+                    g_PluginSignals.erase(context);
+                    return;
+                }
+            }
         }
     }
 
@@ -359,7 +438,10 @@ public:
             rootconsole->ConsolePrint("Plugin: %s", current_plugin_name.c_str());
 
             for (const auto& sig_pair : plugin_pair.second.signals) {
-                rootconsole->ConsolePrint("  Signal: %s (Address: %p)", sig_pair.second.signal_name.c_str(), sig_pair.first);
+                rootconsole->ConsolePrint("  Signal: %s (Address: %p)%s",
+                    sig_pair.second.signal_name.c_str(),
+                    sig_pair.first,
+                    sig_pair.second.is_private ? " [Private]" : "");
 
                 for (const auto& slot : sig_pair.second.slots) {
                     rootconsole->ConsolePrint("    -> Slot: %s [Priority: %d]", slot.func->DebugName(), slot.priority);

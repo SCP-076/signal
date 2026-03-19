@@ -1,8 +1,12 @@
-# SourceMod Static Signal-Slot Extension
+# SourceMod Signal-Slot Extension
 
 **Requirements:** SourceMod 1.12+
 
-This extension implements a **Static Registration Pattern** for **internal communication within a single SourceMod plugin**. By scanning specific `pubvar`s during the plugin's load phase, it automatically wires an internal event network. This allows a large, monolithic `.smx` project—even one compiled from dozens or hundreds of source files—to be easily and cleanly decoupled.
+This is a lightweight extension that introduces a **Declarative Event Bus** (or Pub/Sub system) for internal communication within a single SourceMod plugin. 
+
+Instead of manually registering forwards or calling initialization functions across dozens of files, this extension utilizes a **pubvar-driven auto-wiring mechanism**. By using simple macros to create specifically formatted `pubvar`s, the extension scans these variables during the plugin's load phase and automatically wires up your internal event network.
+
+This allows massive, monolithic `.smx` projects to be easily and cleanly decoupled, letting you focus on feature logic rather than boilerplate wiring.
 
 ---
 
@@ -66,14 +70,17 @@ PluginStart(ModuleC)
 
 ```
 
-## 2. Passing Parameters & Handling Action Returns
-Signals can pass a single parameter payload and connect to slot functions that return an Action. When emitted, the signal will return the highest Action value across all executed slots.
+## 2. Payloads & Action Returns
+Signals can pass a single argument to all connected slots. 
+
+If slot functions return an `Action`, the emitter will aggregate them and return the highest `Action` value across all executions.
 
 ```sourcepawn
 SIG(ClientSettingsChanged)
 
 public void OnClientSettingsChanged(int client)
 {
+    // Emits the payload and captures the highest Action returned
     Action result = ClientSettingsChanged.Emit(client);
     if (result != Plugin_Continue)
     {
@@ -81,32 +88,31 @@ public void OnClientSettingsChanged(int client)
     }
 }
 
-// --- Slot A ---
+// --- Module A ---
 CONNECT_SIG(FunctionA, ClientSettingsChanged)
 public Action FunctionA(int client)
 {
-    // Do some checks
     return Plugin_Continue;
 }
 
-// --- Slot B ---
+// --- Module B ---
 CONNECT_SIG(FunctionB, ClientSettingsChanged)
 public Action FunctionB(int client)
 {
-    // Do some checks
+    // This will become the final result if it's the highest Action
     return Plugin_Handled;
 }
 ```
 
 ## 3. Execution Priorities
-By default, the execution order of slot functions is not guaranteed. If you require strict execution sequencing, use the `CONNECT_SIG_EX` macro to assign a custom priority. Higher priority values execute first.
+By default, slots have a neutral priority (0). If you need a strict execution order, use the CONNECT_SIG_EX macro. Slots with higher priority values will always execute first.
 
 ```sourcepawn
-CONNECT_SIG_EX(FuncA, AnySignal, SigPriority(100))  // Executes first (highest priority)
-CONNECT_SIG_EX(FuncB, AnySignal, SigPriority(-10))  // Priority can be a negative value
-CONNECT_SIG(FuncC, AnySignal)                       // Default macro assigns a priority of 0
+CONNECT_SIG_EX(FuncA, AnySignal, SigPriority(100))  // Executes first
+CONNECT_SIG_EX(FuncB, AnySignal, SigPriority(-10))  // Executes last
+CONNECT_SIG(FuncC, AnySignal)                       // Default priority (0)
 ```
-> **Debugging Tip:** Use the server console command `sm signals` to dump a list of active signal connections and view the exact execution order of all slot functions per plugin.
+> **Debugging Tip:** Use the server console command `sm signals` to dump a list of active signal connections and their exact execution order.
 
 ---
 
@@ -114,3 +120,41 @@ CONNECT_SIG(FuncC, AnySignal)                       // Default macro assigns a p
 
 * **Public Functions Only:** Signals can only be connected to `public` functions. `methodmap` methods are strictly unsupported.
 * **Safety Checks:** The provided macros perform automatic type-checking during compilation and will throw syntax errors if signatures do not match. While the compiler cannot verify if a connected function is actually marked as `public`, the extension securely handles this by detecting invalid bindings during the load phase and preventing the plugin from running.
+
+
+## Changelog
+
+### v1.2.1
+* **Enhanced Error Handling:** Switched to using SourceMod's internal `EvictWithError`.
+* **New Lifecycle Signal:** Added the `OnAllSignalsLoaded` auto-triggered signal. This fires immediately after all signal-slot wiring is completed but *before* `OnPluginStart()`, making it the perfect injection point for early modular initialization in `.inc` files.
+* **New Utility (`console_macro.inc`):** Introduced a set of shortcut macros leveraging `OnAllSignalsLoaded` to provide rapid, declarative command registration from anywhere in your codebase.
+
+#### `console_macro.inc` Usage Example:
+```sourcepawn
+#include <console_macro> // Just include this to use the shortcut macros
+
+
+// Example: Create a console command "sm_console1" from anywhere in your plugin
+CONSOLE_COMMAND(sm_console1, "This is a console command")
+{
+    PrintToServer("%N used sm_console1 (args=%i)", client, args);
+    return Plugin_Handled;
+}
+
+
+// Example: Create an admin command "sm_admin1" from anywhere in your plugin
+ADMIN_COMMAND(sm_admin1, ADMFLAG_ROOT, "This is an admin command")
+{
+    PrintToServer("Admin %N used sm_admin1 (args=%i)", client, args);
+    return Plugin_Handled;
+}
+
+
+public void OnPluginStart()
+{
+    // You do NOT need to manually register commands (RegConsoleCmd/RegAdminCmd) here!
+    // The inc automatically registers all macro-defined commands globally
+    // before OnPluginStart() even executes.
+}
+
+```
