@@ -99,12 +99,7 @@ stock void _HookEventTrim(const char[] name, EventHook callback,EventHookMode mo
 
 	ON_EVENT_POST_NO_COPY(player_say)
 	{
-		char sbuff[256];
-		int client = GetClientOfUserId(event.GetInt("userid"));
-		event.GetString("text",sbuff,sizeof(sbuff));
-		
-		PrintToServer("ON_EVENT_POST_NO_COPY: player_say %N %s",client,sbuff);
-		
+		PrintToServer("ON_EVENT_POST_NO_COPY: player_say");
 	}
 
 
