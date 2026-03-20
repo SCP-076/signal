@@ -127,7 +127,7 @@ CONNECT_SIG(FuncC, AnySignal)                       // Default priority (0)
 ### v1.2.1
 * **Enhanced Error Handling:** Switched to using SourceMod's internal `EvictWithError`.
 * **New Lifecycle Signal:** Added the `OnAllSignalsLoaded` auto-triggered signal. This fires immediately after all signal-slot wiring is completed but *before* `OnPluginStart()`, making it the perfect injection point for early modular initialization in `.inc` files.
-* **New Utility (`console_macro.inc`):** Introduced a set of shortcut macros leveraging `OnAllSignalsLoaded` to provide rapid, declarative command registration from anywhere in your codebase.
+* **New Utilities (console_macro.inc, event_hook_macro.inc):** Shortcut macros using OnAllSignalsLoaded for declarative, anywhere-in-code command and event registration.
 
 #### `console_macro.inc` Usage Example:
 ```sourcepawn
@@ -149,12 +149,28 @@ ADMIN_COMMAND(sm_admin1, ADMFLAG_ROOT, "This is an admin command")
     return Plugin_Handled;
 }
 
+```
 
-public void OnPluginStart()
+
+#### `event_hook_macro.inc` Usage Example:
+```sourcepawn
+#include <event_hook_macro> 
+
+
+ON_EVENT_PRE(player_say)
 {
-    // You do NOT need to manually register commands (RegConsoleCmd/RegAdminCmd) here!
-    // The inc automatically registers all macro-defined commands globally
-    // before OnPluginStart() even executes.
+	int client = GetClientOfUserId(event.GetInt("userid"));
+
+	PrintToServer("ON_EVENT_PRE: player_say (%N)",client);
 }
+
+
+ON_EVENT_POST(player_say)
+{
+	int client = GetClientOfUserId(event.GetInt("userid"));
+	
+	PrintToServer("ON_EVENT_POST: player_say (%N)",client);
+}
+
 
 ```
