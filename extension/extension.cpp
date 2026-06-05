@@ -493,7 +493,9 @@ void ShutdownSignalSlotSystem()
 
 bool Sample::SDK_OnLoad(char* error, size_t maxlength, bool late)
 {
+    sharesys->AddNatives(myself, MyNatives);
     InitializeSignalSlotSystem(late);
+    sharesys->RegisterLibrary(myself, "signal");
     return true;
 }
 
@@ -502,7 +504,3 @@ void Sample::SDK_OnUnload()
     ShutdownSignalSlotSystem();
 }
 
-void Sample::SDK_OnAllLoaded()
-{
-    sharesys->AddNatives(myself, MyNatives);
-}
