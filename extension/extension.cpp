@@ -75,13 +75,10 @@ public:
 
 
 // ======================================================================
+//  Memory-mapped structure (Ensure strict alignment with inc)
 // ======================================================================
 #define MAX_LEN_SIGNAL_NAME 32
 #define MAX_LEN_SIGNAL_SLOT 32
-
-// ======================================================================
-//  Memory-mapped structure (Ensure strict alignment with inc)
-// ======================================================================
 struct Cpp_SignalSlot {
     cell_t global;       // Offset: 0 bytes
     cell_t priority;     // Offset: 4 bytes
@@ -95,6 +92,7 @@ static_assert(sizeof(Cpp_SignalSlot) == 72, "Cpp_SignalSlot size mismatch! Check
 // ======================================================================
 //  Core Data Containers and Control Flags
 // ======================================================================
+#define SIGNAL_EXT_API_VERSION 10
 struct SlotInfo {
     IPluginFunction* func;
     int priority;
@@ -125,6 +123,7 @@ enum EmitSignalFlag
     ES_StopOnHandled = (1 << 2)
 };
 
+
 // ======================================================================
 // ======================================================================
 
@@ -140,15 +139,15 @@ static void TrimWhitespace(std::string& str) {
 }
 
 
-// Returns SP_ERROR_NONE (0) on full success. 
-// If internal_abort_on_error is true, or ES_FailOnError is set, it will 
-// return the error code immediately upon the first failing slot.
-static int ExecuteSignalGroup(const SignalGroup& group, cell_t data, int flags, cell_t& max_result, bool internal_abort_on_error = false)
+// Returns SP_ERROR_NONE (0) unless ES_FailOnError is set and a slot
+// raises an error, in which case the error code is returned immediately.
+// Slots that error without ES_FailOnError are silently skipped.
+static int ExecuteSignalGroup(const SignalGroup& group, cell_t data, int flags, cell_t& max_result)
 {
     max_result = 0;
     bool has_executed = false;
     bool stop_on_handled = (flags & ES_StopOnHandled) != 0;
-    bool native_fail_on_error = (flags & ES_FailOnError) != 0;
+    bool fail_on_error = (flags & ES_FailOnError) != 0;
 
     for (const SlotInfo& slot : group.slots)
     {
@@ -170,10 +169,8 @@ static int ExecuteSignalGroup(const SignalGroup& group, cell_t data, int flags, 
         }
         else
         {
-            // SourceMod VM automatically logs the stack trace to the server console.
-            // We just need to decide whether to abort the remaining slots loop.
-            if (internal_abort_on_error || native_fail_on_error) {
-                return err; // Silent fail at the C++ loop level, let caller handle reporting.
+            if (fail_on_error) {
+                return err;
             }
         }
     }
@@ -219,13 +216,7 @@ cell_t EmitSignal_Native(IPluginContext* pContext, const cell_t* params)
     }
 
     cell_t max_result = 0;
-    cell_t data = params[2];
-
-    // Standard Native Emit: Do not force internal abort, rely solely on Pawn flags.
-    int err = ExecuteSignalGroup(sig_it->second, data, flags, max_result, false);
-
-    // Only throw Native Error if the pawn-level ES_FailOnError flag was explicitly requested
-    if (err != SP_ERROR_NONE && (flags & ES_FailOnError)) {
+    if (ExecuteSignalGroup(sig_it->second, params[2], flags, max_result) != SP_ERROR_NONE) {
         return pContext->ThrowNativeError("ES_FailOnError: stop emit signal '%s'.", sig_it->second.signal_name.c_str());
     }
 
@@ -274,6 +265,18 @@ public:
         uint32_t check_idx;
         if (context->FindPubvarByName("__include_signal__", &check_idx) != SP_ERROR_NONE) {
             return;
+        }
+
+        // Check plugin api version 
+        sp_pubvar_t* ver_pubvar;
+        if (context->GetPubvarByIndex(check_idx, &ver_pubvar) == SP_ERROR_NONE) {
+            cell_t api_version = *(cell_t*)(ver_pubvar->offs);
+            if (api_version > SIGNAL_EXT_API_VERSION) {
+                SMPlugin* sm = reinterpret_cast<SMPlugin*>(plugin);
+                sm->EvictWithError(Plugin_Error,
+                    "Plugin requires Signal API %d, please update the extension.",api_version);
+                return;
+            }
         }
 
         PluginSignalContainer container;
@@ -364,13 +367,10 @@ public:
         if (on_all_loaded_addr != nullptr) {
             auto sig_it = g_PluginSignals[context].signals.find(on_all_loaded_addr);
             if (sig_it != g_PluginSignals[context].signals.end()) {
-                cell_t dummy_result = 0;
+                cell_t max_result = 0;
 
-                // Use ES_None for standard flags, but set internal_abort_on_error = true
-                // This creates a "silent fail" at the ExecuteSignalGroup level that we handle below.
-                int err = ExecuteSignalGroup(sig_it->second, 0, ES_None, dummy_result, true);
-
-                if (err != SP_ERROR_NONE) {
+                // Use ES_FailOnError to handle error in OnAllSignalsLoaded.
+                if (ExecuteSignalGroup(sig_it->second, 0, ES_FailOnError, max_result) != SP_ERROR_NONE) {
                     SMPlugin* sm_plugin = reinterpret_cast<SMPlugin*>(plugin);
                     sm_plugin->EvictWithError(Plugin_Error,
                         "'%s' failed during initialization: Error executing slot for signal '%s'.",
@@ -410,11 +410,13 @@ public:
             target_plugin = command->Arg(2);
         }
 
+        bool dump_all = false;
         if (target_plugin) {
             rootconsole->ConsolePrint("Dumping active signals and slots in execution order for plugin: %s", target_plugin);
         }
         else {
             rootconsole->ConsolePrint("Dumping active signals and slots in execution order:");
+            dump_all = true;
         }
 
         if (g_PluginSignals.empty()) {
@@ -444,13 +446,17 @@ public:
                     sig_pair.second.is_private ? " [Private]" : "");
 
                 for (const auto& slot : sig_pair.second.slots) {
-                    rootconsole->ConsolePrint("    -> Slot: %s [Priority: %d]", slot.func->DebugName(), slot.priority);
+                    rootconsole->ConsolePrint("    -> Priority: %d\t %s", slot.priority, slot.func->DebugName());
                 }
             }
         }
 
         if (target_plugin != nullptr && !found_any) {
             rootconsole->ConsolePrint("  No active signals found for plugin matching '%s'.", target_plugin);
+        }
+
+        if (dump_all) {
+            rootconsole->ConsolePrint("\nTo show a specific plugin, use \"sm signals <file>\"");
         }
     }
 }g_DumpSignalCmd;
