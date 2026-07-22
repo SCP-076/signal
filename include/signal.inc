@@ -46,13 +46,19 @@ typeset FunctionSignalSlot
  * @param %2        The signal.
  * @param %3        Custom priority value (higher values execute first).
  */
-#define CONNECT_SIG_EX(%1,%2,%3) public const SignalSlotInfo __CSIG_%1_%2 = {false,%3,#%1,#%2};stock void __testslot_%1_%2(){Signal a; a = %2;FunctionSignalSlot f = %1;if(a._m && f){}}
+#define CONNECT_SIG_EX(%1,%2,%3) \
+	public const SignalSlotInfo __CSIG_%1_%2 = {false,%3,#%1,#%2};\
+	stock void __TEST_%1_%2(){\
+		Signal a;a = %2;\
+		FunctionSignalSlot f = %1;\
+		if(a._dummy && f){}\
+	}
+
 
 
 enum struct Signal
 {
-	int _m;
-
+	int _dummy;
 
 	/**
 	 * Emits this signal, triggering all connected slot functions.
@@ -116,10 +122,9 @@ native int GetSignalSlotCount(Signal signal);
 
 
 
-
 /**
  * Emitted automatically after all signals and slots within the plugin have 
- * been loaded and wired.
+ * been loaded.
  *
  * This signal triggers earlier than OnPluginStart(). At this execution stage, 
  * some core SourceMod and module natives are available to be called. However, 
@@ -138,7 +143,6 @@ native int GetSignalSlotCount(Signal signal);
  * the plugin will be marked as failed.
  */
 SIG(OnAllSignalsLoaded)
-
 
 
 
@@ -162,6 +166,8 @@ public Extension __ext_signal =
 #endif
 };
 
+#define _CONNECT_SIG_NOCHECK(%1,%2,%3) public const SignalSlotInfo __CSIG_%1_%2 = {false,%3,#%1,#%2};
+
 enum struct SignalSlotInfo
 {
 	bool global;		
@@ -176,5 +182,4 @@ static_assert(SignalSlotInfo::priority * 4 == 4, "Member offset mismatch: priori
 static_assert(SignalSlotInfo::slot * 4 == 8, "Member offset mismatch: slot");
 static_assert(SignalSlotInfo::signal * 4 == 40, "Member offset mismatch: signal");
 static_assert(sizeof(SignalSlotInfo) * 4 == 72, "SignalSlotInfo size mismatch!");
-public const int __include_signal__;
-
+public const int __include_signal__ = 0;

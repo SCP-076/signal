@@ -22,7 +22,10 @@
  * @param %1        Command name (e.g., sm_mycmd).
  * @param %2        Command description.
  */
-#define SERVER_COMMAND(%1,%2) CONNECT_SIG(%1_RegCmd,OnAllSignalsLoaded) public void %1_RegCmd(){RegServerCmd(#%1,%1_callback,%2);} Action %1_callback(int args)
+#define SERVER_COMMAND(%1,%2) \
+	CONNECT_SIG(_CMD_%1,OnAllSignalsLoaded)\
+	public void _CMD_%1(){RegServerCmd(#%1,CmdCallback_%1,%2);}\
+	Action CmdCallback_%1(int args)
 
 /**
  * Creates a Server Command with specific flags.
@@ -31,7 +34,10 @@
  * @param %2        Command description.
  * @param %3        Command flags (FCVAR_* bitmask).
  */
-#define SERVER_COMMAND_F(%1,%2,%3) CONNECT_SIG(%1_RegCmd,OnAllSignalsLoaded) public void %1_RegCmd(){RegServerCmd(#%1,%1_callback,%2,%3);} Action %1_callback(int args)
+#define SERVER_COMMAND_F(%1,%2,%3)\
+	CONNECT_SIG(_CMD_%1,OnAllSignalsLoaded)\
+	public void _CMD_%1(){RegServerCmd(#%1,CmdCallback_%1,%2,%3);}\
+	Action CmdCallback_%1(int args)
 
 /**
  * Creates a Console Command (accessible by players).
@@ -39,7 +45,10 @@
  * @param %1        Command name.
  * @param %2        Command description.
  */
-#define CONSOLE_COMMAND(%1,%2) CONNECT_SIG(%1_RegCmd,OnAllSignalsLoaded) public void %1_RegCmd(){RegConsoleCmd(#%1,%1_callback,%2);} Action %1_callback(int client,int args)
+#define CONSOLE_COMMAND(%1,%2) \
+	CONNECT_SIG(_CMD_%1,OnAllSignalsLoaded)\
+	public void _CMD_%1(){RegConsoleCmd(#%1,CmdCallback_%1,%2);}\
+	Action CmdCallback_%1(int client,int args)
 
 /**
  * Creates a Console Command with specific flags.
@@ -48,7 +57,10 @@
  * @param %2        Command description.
  * @param %3        Command flags (FCVAR_* bitmask).
  */
-#define CONSOLE_COMMAND_F(%1,%2,%3) CONNECT_SIG(%1_RegCmd,OnAllSignalsLoaded) public void %1_RegCmd(){RegConsoleCmd(#%1,%1_callback,%2,%3);} Action %1_callback(int client,int args)
+#define CONSOLE_COMMAND_F(%1,%2,%3) \
+	CONNECT_SIG(_CMD_%1,OnAllSignalsLoaded)\
+	public void _CMD_%1(){RegConsoleCmd(#%1,CmdCallback_%1,%2,%3);}\
+	Action CmdCallback_%1(int client,int args)
 
 /**
  * Creates a standard Admin Command without a command group.
@@ -57,7 +69,11 @@
  * @param %2        Admin flags required (ADMFLAG_* bitmask).
  * @param %3        Command description.
  */
-#define ADMIN_COMMAND(%1,%2,%3) CONNECT_SIG(%1_RegCmd,OnAllSignalsLoaded) public void %1_RegCmd(){RegAdminCmd(#%1,%1_callback,%2,%3);} Action %1_callback(int client,int args)
+#define ADMIN_COMMAND(%1,%2,%3) \
+	CONNECT_SIG(_CMD_%1,OnAllSignalsLoaded)\
+	public void _CMD_%1(){RegAdminCmd(#%1,CmdCallback_%1,%2,%3);}\
+	Action CmdCallback_%1(int client,int args)
+
 
 /**
  * Creates a standard Admin Command with specific console flags.
@@ -67,7 +83,10 @@
  * @param %3        Command description.
  * @param %4        Command flags (FCVAR_* bitmask).
  */
-#define ADMIN_COMMAND_F(%1,%2,%3,%4) CONNECT_SIG(%1_RegCmd,OnAllSignalsLoaded) public void %1_RegCmd(){RegAdminCmd(#%1,%1_callback,%2,%3,"",%4);} Action %1_callback(int client,int args)
+#define ADMIN_COMMAND_F(%1,%2,%3,%4) \
+	CONNECT_SIG(_CMD_%1,OnAllSignalsLoaded)\
+	public void _CMD_%1(){RegAdminCmd(#%1,CmdCallback_%1,%2,%3,"",%4);}\
+	Action CmdCallback_%1(int client,int args)
 
 /**
  * Creates an Admin Command assigned to a specific command group.
@@ -77,7 +96,10 @@
  * @param %3        Command group name.
  * @param %4        Command description.
  */
-#define ADMIN_GROUP_COMMAND(%1,%2,%3,%4) CONNECT_SIG(%1_RegCmd,OnAllSignalsLoaded) public void %1_RegCmd(){RegAdminCmd(#%1,%1_callback,%2,%4,%3);} Action %1_callback(int client,int args)
+#define ADMIN_GROUP_COMMAND(%1,%2,%3,%4) \
+	CONNECT_SIG(_CMD_%1,OnAllSignalsLoaded)\
+	public void _CMD_%1(){RegAdminCmd(#%1,CmdCallback_%1,%2,%4,%3);}\
+	Action CmdCallback_%1(int client,int args)
 
 /**
  * Creates an Admin Command with a command group and console flags.
@@ -88,7 +110,10 @@
  * @param %4        Command description.
  * @param %5        Command flags (FCVAR_* bitmask).
  */
-#define ADMIN_GROUP_COMMAND_F(%1,%2,%3,%4,%5) CONNECT_SIG(%1_RegCmd,OnAllSignalsLoaded) public void %1_RegCmd(){RegAdminCmd(#%1,%1_callback,%2,%4,%3,%5);} Action %1_callback(int client,int args)
+#define ADMIN_GROUP_COMMAND_F(%1,%2,%3,%4,%5) \
+	CONNECT_SIG(_CMD_%1,OnAllSignalsLoaded)\
+	public void _CMD_%1(){RegAdminCmd(#%1,CmdCallback_%1,%2,%4,%3,%5);}\
+	Action CmdCallback_%1(int client,int args)
 
 
 /*
