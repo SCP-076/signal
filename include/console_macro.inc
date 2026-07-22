@@ -116,6 +116,19 @@
 	Action CmdCallback_%1(int client,int args)
 
 
+
+/**
+ * Creates a Root Admin Command without a command group.
+ *
+ * @param %1        Command name.
+ * @param %2        Command description.
+ */
+#define ROOT_COMMAND(%1,%2) \
+	CONNECT_SIG(_CMD_%1,OnAllSignalsLoaded)\
+	public void _CMD_%1(){RegAdminCmd(#%1,CmdCallback_%1,ADMFLAG_ROOT,%2);}\
+	Action CmdCallback_%1(int client,int args)
+
+
 /*
  ============================================================================
  Usage Examples
@@ -168,6 +181,12 @@
 	ADMIN_GROUP_COMMAND_F(sm_admingroup2, ADMFLAG_ROOT, "my_group", "This is a grouped admin command with flags", FCVAR_NONE)
 	{
 		PrintToServer("Admin %N used sm_admingroup2 (args=%i)", client, args);
+		return Plugin_Handled;
+	}
+
+	SERVER_COMMAND(sm_root1, "This is a root admin command")
+	{
+		PrintToServer("Root Admin %N used sm_admin1 (args=%i)", client, args);
 		return Plugin_Handled;
 	}
 */
