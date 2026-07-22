@@ -28,6 +28,14 @@ typeset FunctionSignalSlot
 	function Action(any data);
 }
 
+
+enum LocalAddr
+{
+	INVALID_LOCAL_ADDR = -1,
+}
+
+
+
 //Declares a new signal variable.
 #define SIG(%1) public const Signal %1;
 #define SigPriority(%1) (%1)
@@ -143,6 +151,48 @@ native int GetSignalSlotCount(Signal signal);
  * the plugin will be marked as failed.
  */
 SIG(OnAllSignalsLoaded)
+
+
+
+/**
+ * Gets the local-address offset of a cell variable.
+ * 
+ * @note            Should only be used on global or local-static variables;
+ *                  stack-local addresses are invalid once the frame exits.
+ * @param cell      Variable to query (by-ref).
+ * @return          LocalAddr for use with SetPluginCellLocal().
+ */
+native LocalAddr GetCellLocalAddress(const any &cell);
+
+/**
+ * Gets the local-address offset of a string buffer.
+ * 
+ * @note            Should only be used on global or local-static variables;
+ *                  stack-local addresses are invalid once the frame exits.
+ * @param buffer    Buffer to query (by-ref).
+ * @return          LocalAddr for use with SetPluginStringLocal().
+ */
+native LocalAddr GetStringLocalAddress(const char[] buffer);
+
+/**
+ * Writes a value to a plugin cell variable by local address.
+ *
+ * @param addr      LocalAddr from GetCellLocalAddress().
+ * @param value     Value to write.
+ * @error           Invalid local address.
+ */
+native void SetPluginCellLocal(LocalAddr addr, any value);
+
+/**
+ * Copies a string to a plugin buffer by local address.
+ *
+ * @param addr      LocalAddr from GetStringLocalAddress().
+ * @param maxsize   Destination buffer size in bytes.
+ * @param src       Source string to copy.
+ * @error           Invalid local address or invalid source string.
+ */
+native void SetPluginStringLocal(LocalAddr addr, int maxsize, const char[] src);
+
 
 
 

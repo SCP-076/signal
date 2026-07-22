@@ -248,6 +248,55 @@ cell_t GetSignalSlotCount_Native(IPluginContext* pContext, const cell_t* params)
     return static_cast<cell_t>(sig_it->second.slots.size());
 }
 
+
+static cell_t GetCellLocal(IPluginContext* ctx, const cell_t* params) 
+{
+    return params[1];
+}
+
+
+static cell_t GetStringLocal(IPluginContext* ctx, const cell_t* params) 
+{
+    return params[1];
+}
+
+static cell_t SetLocalCell(IPluginContext* ctx, const cell_t* params) 
+{
+    cell_t local_addr = params[1];
+    cell_t value = params[2];
+
+    cell_t* phys;
+    int err = ctx->LocalToPhysAddr(local_addr, &phys);
+    if (err != SP_ERROR_NONE) {
+        return ctx->ThrowNativeError("invalid local address %d",
+            local_addr);
+    }
+
+    *phys = value;
+    return 0;
+}
+
+static cell_t SetLocalString(IPluginContext* ctx, const cell_t* params) 
+{
+    cell_t local_addr = params[1];
+    cell_t maxsize = params[2];
+
+    char* src_phys;
+    int err = ctx->LocalToString(params[3], &src_phys);
+    if (err != SP_ERROR_NONE) {
+        return ctx->ThrowNativeError("invalid source string");
+    }
+
+    err = ctx->StringToLocal(local_addr, maxsize, src_phys);
+    if (err != SP_ERROR_NONE) {
+        return ctx->ThrowNativeError("cannot write to local address %d", local_addr);
+    }
+
+    return 0;
+}
+
+
+
 // ======================================================================
 //  Plugin Lifecycle Manager (Parsing, Validation, and Interception)
 // ======================================================================
@@ -469,6 +518,12 @@ static const sp_nativeinfo_t MyNatives[] =
 {
     {"EmitSignal", EmitSignal_Native},
     {"GetSignalSlotCount", GetSignalSlotCount_Native},
+
+    {"GetCellLocalAddress", GetCellLocal},
+    {"GetStringLocalAddress", GetStringLocal},
+    {"SetPluginCellLocal", SetLocalCell},
+    {"SetPluginStringLocal", SetLocalString},
+    
     {NULL,         NULL},
 };
 
