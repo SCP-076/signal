@@ -23,7 +23,7 @@
  * @param %2        Command description.
  */
 #define SERVER_COMMAND(%1,%2) \
-	CONNECT_SIG(_CMD_%1,OnAllSignalsLoaded)\
+	_CONNECT_SIG_NOCHECK(_CMD_%1,OnAllSignalsLoaded,0)\
 	public void _CMD_%1(){RegServerCmd(#%1,CmdCallback_%1,%2);}\
 	Action CmdCallback_%1(int args)
 
@@ -35,7 +35,7 @@
  * @param %3        Command flags (FCVAR_* bitmask).
  */
 #define SERVER_COMMAND_F(%1,%2,%3)\
-	CONNECT_SIG(_CMD_%1,OnAllSignalsLoaded)\
+	_CONNECT_SIG_NOCHECK(_CMD_%1,OnAllSignalsLoaded,0)\
 	public void _CMD_%1(){RegServerCmd(#%1,CmdCallback_%1,%2,%3);}\
 	Action CmdCallback_%1(int args)
 
@@ -46,7 +46,7 @@
  * @param %2        Command description.
  */
 #define CONSOLE_COMMAND(%1,%2) \
-	CONNECT_SIG(_CMD_%1,OnAllSignalsLoaded)\
+	_CONNECT_SIG_NOCHECK(_CMD_%1,OnAllSignalsLoaded,0)\
 	public void _CMD_%1(){RegConsoleCmd(#%1,CmdCallback_%1,%2);}\
 	Action CmdCallback_%1(int client,int args)
 
@@ -58,7 +58,7 @@
  * @param %3        Command flags (FCVAR_* bitmask).
  */
 #define CONSOLE_COMMAND_F(%1,%2,%3) \
-	CONNECT_SIG(_CMD_%1,OnAllSignalsLoaded)\
+	_CONNECT_SIG_NOCHECK(_CMD_%1,OnAllSignalsLoaded,0)\
 	public void _CMD_%1(){RegConsoleCmd(#%1,CmdCallback_%1,%2,%3);}\
 	Action CmdCallback_%1(int client,int args)
 
@@ -70,8 +70,20 @@
  * @param %3        Command description.
  */
 #define ADMIN_COMMAND(%1,%2,%3) \
-	CONNECT_SIG(_CMD_%1,OnAllSignalsLoaded)\
+	_CONNECT_SIG_NOCHECK(_CMD_%1,OnAllSignalsLoaded,0)\
 	public void _CMD_%1(){RegAdminCmd(#%1,CmdCallback_%1,%2,%3);}\
+	Action CmdCallback_%1(int client,int args)
+
+
+/**
+ * Creates a Root Admin Command without a command group.
+ *
+ * @param %1        Command name.
+ * @param %2        Command description.
+ */
+#define ROOT_COMMAND(%1,%2) \
+	_CONNECT_SIG_NOCHECK(_CMD_%1,OnAllSignalsLoaded,0)\
+	public void _CMD_%1(){RegAdminCmd(#%1,CmdCallback_%1,ADMFLAG_ROOT,%2);}\
 	Action CmdCallback_%1(int client,int args)
 
 
@@ -84,7 +96,7 @@
  * @param %4        Command flags (FCVAR_* bitmask).
  */
 #define ADMIN_COMMAND_F(%1,%2,%3,%4) \
-	CONNECT_SIG(_CMD_%1,OnAllSignalsLoaded)\
+	_CONNECT_SIG_NOCHECK(_CMD_%1,OnAllSignalsLoaded,0)\
 	public void _CMD_%1(){RegAdminCmd(#%1,CmdCallback_%1,%2,%3,"",%4);}\
 	Action CmdCallback_%1(int client,int args)
 
@@ -97,7 +109,7 @@
  * @param %4        Command description.
  */
 #define ADMIN_GROUP_COMMAND(%1,%2,%3,%4) \
-	CONNECT_SIG(_CMD_%1,OnAllSignalsLoaded)\
+	_CONNECT_SIG_NOCHECK(_CMD_%1,OnAllSignalsLoaded,0)\
 	public void _CMD_%1(){RegAdminCmd(#%1,CmdCallback_%1,%2,%4,%3);}\
 	Action CmdCallback_%1(int client,int args)
 
@@ -111,21 +123,8 @@
  * @param %5        Command flags (FCVAR_* bitmask).
  */
 #define ADMIN_GROUP_COMMAND_F(%1,%2,%3,%4,%5) \
-	CONNECT_SIG(_CMD_%1,OnAllSignalsLoaded)\
+	_CONNECT_SIG_NOCHECK(_CMD_%1,OnAllSignalsLoaded,0)\
 	public void _CMD_%1(){RegAdminCmd(#%1,CmdCallback_%1,%2,%4,%3,%5);}\
-	Action CmdCallback_%1(int client,int args)
-
-
-
-/**
- * Creates a Root Admin Command without a command group.
- *
- * @param %1        Command name.
- * @param %2        Command description.
- */
-#define ROOT_COMMAND(%1,%2) \
-	CONNECT_SIG(_CMD_%1,OnAllSignalsLoaded)\
-	public void _CMD_%1(){RegAdminCmd(#%1,CmdCallback_%1,ADMFLAG_ROOT,%2);}\
 	Action CmdCallback_%1(int client,int args)
 
 
@@ -166,6 +165,12 @@
 		return Plugin_Handled;
 	}
 
+	ROOT_COMMAND(sm_root1, "This is a root admin command")
+	{
+		PrintToServer("Root Admin %N used sm_admin1 (args=%i)", client, args);
+		return Plugin_Handled;
+	}
+
 	ADMIN_COMMAND_F(sm_admin2, ADMFLAG_ROOT, "This is an admin command with flags", FCVAR_NONE)
 	{
 		PrintToServer("Admin %N used sm_admin2 (args=%i)", client, args);
@@ -184,9 +189,4 @@
 		return Plugin_Handled;
 	}
 
-	SERVER_COMMAND(sm_root1, "This is a root admin command")
-	{
-		PrintToServer("Root Admin %N used sm_admin1 (args=%i)", client, args);
-		return Plugin_Handled;
-	}
 */

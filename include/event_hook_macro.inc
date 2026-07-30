@@ -22,7 +22,7 @@
  * @param %1        Event name (e.g., player_say).
  */
 #define ON_EVENT_PRE_ACTION(%1) \
-	CONNECT_SIG(_PRE_%1,OnAllSignalsLoaded)\
+	_CONNECT_SIG_NOCHECK(_PRE_%1,OnAllSignalsLoaded,0)\
 	public void _PRE_%1(){_HookEventTrim(#%1,EventPreCallback_%1,EventHookMode_Pre);}\
 	Action EventPreCallback_%1(Event event, const char[] name, bool dontBroadcast)
 
@@ -33,7 +33,7 @@
  * @param %1        Event name (e.g., player_say).
  */
 #define ON_EVENT_PRE(%1) \
-	CONNECT_SIG(_PRE_%1,OnAllSignalsLoaded)\
+	_CONNECT_SIG_NOCHECK(_PRE_%1,OnAllSignalsLoaded,0)\
 	public void _PRE_%1(){_HookEventTrim(#%1,EventPreCallback_%1,EventHookMode_Pre);}\
 	void EventPreCallback_%1(Event event, const char[] name, bool dontBroadcast)
 
@@ -44,7 +44,7 @@
  * @param %1        Event name (e.g., player_say).
  */
 #define ON_EVENT_POST(%1) \
-	CONNECT_SIG(_POST_%1,OnAllSignalsLoaded)\
+	_CONNECT_SIG_NOCHECK(_POST_%1,OnAllSignalsLoaded,0)\
 	public void _POST_%1(){_HookEventTrim(#%1,EventPostCallback_%1,EventHookMode_Post);}\
 	void EventPostCallback_%1(Event event, const char[] name, bool dontBroadcast)
 
@@ -55,7 +55,7 @@
  * @param %1        Event name (e.g., player_say).
  */
 #define ON_EVENT_POST_NO_COPY(%1) \
-	CONNECT_SIG(_POST_%1,OnAllSignalsLoaded)\
+	_CONNECT_SIG_NOCHECK(_POST_%1,OnAllSignalsLoaded,0)\
 	public void _POST_%1(){_HookEventTrim(#%1,EventPostCallback_%1,EventHookMode_PostNoCopy);}\
 	void EventPostCallback_%1(Event event, const char[] name, bool dontBroadcast)
 
