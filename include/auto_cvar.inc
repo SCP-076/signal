@@ -22,18 +22,18 @@
  * ==================================================================================================
  *  Optional config macros (define before including this file)
  *
- *  1.AUTOCVAR_DEF_FLAGS  Default FCVAR flags for CreateConVar (default: 0, no flags)
- *  2.MAX_STRING_CVAR_LEN Max buffer size for string-type AutoCvar globals (default: 2048)
+ *  1.AUTOCVAR_DEF_FLAGS   Default FCVAR flags for CreateConVar (default: 0, no flags)
+ *  2.MAX_STRING_CVAR_LEN  Max buffer size for string-type AutoCvar globals (default: 2048)
  *  3.AUTOCVAR_SLOTS       Max number of AutoCvar slots per plugin (default: 32)
- *  4.AUTOCVAR_PREFIX      Prefix prepended to all cvar names created via AutoCvar
+ *  4.AUTOCVAR_PREFIX      Prefix prepended to all cvar names created via AutoCvar (default: "")
  *
  *  Example:
- *  #define AUTOCVAR_DEF_FLAGS    FCVAR_PROTECTED  // default protection flag for new cvars
+ *  #define AUTOCVAR_DEF_FLAGS    FCVAR_PROTECTED   // default protection flag for new cvars
  *  #define MAX_STRING_CVAR_LEN   512               // reduce string buffer cap
  *  #define AUTOCVAR_SLOTS        128               // reserve 128 slots for this plugin
  *  #define AUTOCVAR_PREFIX       "test_"           // prefix all autocvar-created cvars
  *
- *  #include <signal>
+ *  #include <auto_cvar>
  * ==================================================================================================
  */
 
@@ -276,6 +276,7 @@ stock AutoCvar GetAutoCvar(const any &pubvar)
 	return index;
 }
 
+// Retrieve an AutoCvar by global variable reference.
 stock AutoCvar GetAutoStringCvar(const char[] pubvar)
 {
 	AutoCvar index;
@@ -297,8 +298,6 @@ stock int GetAutoCvarCount()
 ///////////////////////////////////////////////////////////////////
 //                       Internal helpers
 ///////////////////////////////////////////////////////////////////
-
-
 
 enum CvarType
 {
@@ -503,7 +502,8 @@ methodmap AutoCvarFactory_Float
 	}
 }
 
-
+///////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////
 
 
 static any _SetCallback(any index, AutoCvarCB func)

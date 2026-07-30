@@ -2,175 +2,184 @@
 
 **Requirements:** SourceMod 1.12+
 
-This is a lightweight extension that introduces a **Declarative Event Bus** (or Pub/Sub system) for internal communication within a single SourceMod plugin. 
-
-Instead of manually registering forwards or calling initialization functions across dozens of files, this extension utilizes a **pubvar-driven auto-wiring mechanism**. By using simple macros to create specifically formatted `pubvar`s, the extension scans these variables during the plugin's load phase and automatically wires up your internal event network.
-
-This allows massive, monolithic `.smx` projects to be easily and cleanly decoupled, letting you focus on feature logic rather than boilerplate wiring.
+A lightweight extension that brings a **declarative Pub/Sub system** to SourcePawn, making it easy to decouple large single-plugin (`.smx`) projects. Define signals and wire up slots with simple macros—the extension handles the rest automatically at load time.
 
 ---
 
-## 1. Basic Usage: Decoupling Module Initialization
-
-The most common use case is broadcasting a global initialization event to multiple independent modules without having to manually call each function in your main file.
+## 1. Basic Usage
 
 ```sourcepawn
 #include <signal>
 
-// 1. Create a signal named 'InitAllModules'
+// 1. Define a signal
 SIG(InitAllModules)
 
-// --- File 1 ---
-// 2. Declare the connection between 'Module1' and the 'InitAllModules' signal
+// 2. Connect a slot function from anywhere in your code
 CONNECT_SIG(Module1, InitAllModules)
 public void Module1()
 {
-    // Module 1 initialization logic...
+    // Module 1 init logic...
 }
 
-// --- File 2 ---
-CONNECT_SIG(Module2, InitAllModules)
-public void Module2()
-{
-    // Module 2 initialization logic...
-}
-
-// --- Main File ---
+// 3. Emit the signal to trigger all connected slots
 public void OnPluginStart()
 {
-    // 3. Emit the signal, executing both Module1 and Module2 initialization logic.
-    // The ES_FailOnError flag ensures that if any module throws an error, 
-    // it propagates outward to safely abort the plugin loading process.
     InitAllModules.Emit(_, ES_FailOnError);
 }
 ```
 
-A step further:
-```sourcepawn
-SIG(SignalPluginStart)
-
-//Further abstraction
-#define PluginStart(%1) CONNECT_SIG(OnPluginStart_%1,SignalPluginStart) public void OnPluginStart_%1()
-
-
-PluginStart(ModuleA)
-{
-
-}
-
-PluginStart(ModuleB)
-{
-
-}
-
-PluginStart(ModuleC)
-{
-
-}
-
-```
+---
 
 ## 2. Payloads & Action Returns
-Signals can pass a single argument to all connected slots. 
 
-If slot functions return an `Action`, the emitter will aggregate them and return the highest `Action` value across all executions.
+Signals pass a single argument to all slots. Slots returning `Action` can influence the emitter.
 
 ```sourcepawn
 SIG(ClientSettingsChanged)
 
 public void OnClientSettingsChanged(int client)
 {
-    // Emits the payload and captures the highest Action returned
     Action result = ClientSettingsChanged.Emit(client);
     if (result != Plugin_Continue)
-    {
         KickClient(client);
-    }
 }
 
-// --- Module A ---
-CONNECT_SIG(FunctionA, ClientSettingsChanged)
-public Action FunctionA(int client)
+CONNECT_SIG(CheckBanned, ClientSettingsChanged)
+public Action CheckBanned(int client)
 {
     return Plugin_Continue;
 }
 
-// --- Module B ---
-CONNECT_SIG(FunctionB, ClientSettingsChanged)
-public Action FunctionB(int client)
+CONNECT_SIG(EnforceRestrictions, ClientSettingsChanged)
+public Action EnforceRestrictions(int client)
 {
-    // This will become the final result if it's the highest Action
-    return Plugin_Handled;
+    return Plugin_Handled; // highest Action wins
 }
 ```
 
+---
+
 ## 3. Execution Priorities
-By default, slots have a neutral priority (0). If you need a strict execution order, use the CONNECT_SIG_EX macro. Slots with higher priority values will always execute first.
 
 ```sourcepawn
-CONNECT_SIG_EX(FuncA, AnySignal, SigPriority(100))  // Executes first
-CONNECT_SIG_EX(FuncB, AnySignal, SigPriority(-10))  // Executes last
-CONNECT_SIG(FuncC, AnySignal)                       // Default priority (0)
+CONNECT_SIG_EX(FuncA, AnySignal, SigPriority(100))  // executes first
+CONNECT_SIG_EX(FuncB, AnySignal, SigPriority(-10))  // executes last
+CONNECT_SIG(FuncC, AnySignal)                       // default priority (0)
 ```
-> **Debugging Tip:** Use the server console command `sm signals` to dump a list of active signal connections and their exact execution order.
+
+> **Debugging:** Run `sm signals` in the server console to inspect all active signals and their execution order.
 
 ---
 
-## Important Notes & Limitations
+## 4. AutoCvar — Bind ConVar values to global variables
 
-* **Public Functions Only:** Signals can only be connected to `public` functions. `methodmap` methods are strictly unsupported.
-* **Safety Checks:** The provided macros perform automatic type-checking during compilation and will throw syntax errors if signatures do not match. While the compiler cannot verify if a connected function is actually marked as `public`, the extension securely handles this by detecting invalid bindings during the load phase and preventing the plugin from running.
+`auto_cvar.inc` wraps SourceMod ConVars so assigned globals stay **automatically in sync** with the latest cvar value—no manual `GetConVar*` calls needed.
 
-
-## Changelog
-
-### v1.2.1
-* **Enhanced Error Handling:** Switched to using SourceMod's internal `EvictWithError`.
-* **New Lifecycle Signal:** Added the `OnAllSignalsLoaded` auto-triggered signal. This fires immediately after all signal-slot wiring is completed but *before* `OnPluginStart()`, making it the perfect injection point for early modular initialization in `.inc` files.
-* **New Utilities (console_macro.inc, event_hook_macro.inc):** Shortcut macros using OnAllSignalsLoaded for declarative, anywhere-in-code command and event registration.
-
-#### `console_macro.inc` Usage Example:
+### Bind an existing cvar
 ```sourcepawn
-#include <console_macro> // Just include this to use the shortcut macros
+#include <auto_cvar>
 
+CVAR_INT   (g_iHostport,   BindConVar("hostport"))
+CVAR_STRING(g_sHostname,64,BindConVar("hostname"))
 
-// Example: Create a console command "sm_console1" from anywhere in your plugin
-CONSOLE_COMMAND(sm_console1, "This is a console command")
+void PrintInfo()
+{
+    PrintToServer("port=%i  hostname=%s", g_iHostport, g_sHostname);
+}
+```
+
+### Create a plugin-owned cvar
+```sourcepawn
+CVAR_INT   (g_iMyCvar,    CreateConVar("sm_my_int",   "123"))
+CVAR_FLOAT (g_fMyCvar,    CreateConVar("sm_my_float", "3.14").Bounds(0.0, 10.0))
+CVAR_BOOL  (g_bMyCvar,    CreateConVar("sm_my_bool",  "1"))
+CVAR_STRING(g_sMyCvar, 32,CreateConVar("sm_my_str",   "Hello"))
+```
+
+### Chain a change callback
+```sourcepawn
+CVAR_BOOL(g_bCheats, BindConVar("sv_cheats").Callback(OnCheatsChanged))
+
+void OnCheatsChanged(AutoCvar cvar, const char[] oldVal, const char[] newVal)
+{
+    if (g_bCheats)
+        PrintToServer("cheats enabled");
+}
+```
+
+### Available chain options
+| Type | `.Callback` | `.Min` | `.Max` | `.Bounds` |
+|------|:--:|:--:|:--:|:--:|
+| `CVAR_INT` | ✓ | ✓ | ✓ | ✓ |
+| `CVAR_FLOAT` | ✓ | ✓ | ✓ | ✓ |
+| `CVAR_BOOL` | ✓ | — | — | — (enforced [0,1]) |
+| `CVAR_STRING` | ✓ | — | — | — |
+
+### Set values via the AutoCvar object
+```sourcepawn
+GetAutoCvar(g_iMyCvar).IntValue   += 1;
+GetAutoCvar(g_fMyCvar).FloatValue = 2.5;
+GetAutoCvar(g_bMyCvar).BoolValue   = false;
+GetAutoStringCvar(g_sMyCvar).SetString("new value");
+```
+
+> See `example/test_auto_cvar.sp` for a full walkthrough.
+
+---
+
+## 5. Console & Event Macros
+
+### `console_macro.inc` — declarative command registration
+
+```sourcepawn
+#include <console_macro>
+
+CONSOLE_COMMAND(sm_console1, "A console command")
 {
     PrintToServer("%N used sm_console1 (args=%i)", client, args);
     return Plugin_Handled;
 }
 
-
-// Example: Create an admin command "sm_admin1" from anywhere in your plugin
-ADMIN_COMMAND(sm_admin1, ADMFLAG_ROOT, "This is an admin command")
+ADMIN_COMMAND(sm_admin1, ADMFLAG_ROOT, "An admin command")
 {
     PrintToServer("Admin %N used sm_admin1 (args=%i)", client, args);
     return Plugin_Handled;
 }
-
 ```
 
+### `event_hook_macro.inc` — declarative event hooking
 
-#### `event_hook_macro.inc` Usage Example:
 ```sourcepawn
-#include <event_hook_macro> 
-
+#include <event_hook_macro>
 
 ON_EVENT_PRE(player_say)
 {
-	int client = GetClientOfUserId(event.GetInt("userid"));
-
-	PrintToServer("ON_EVENT_PRE: player_say (%N)",client);
+    int client = GetClientOfUserId(event.GetInt("userid"));
+    PrintToServer("PRE player_say: %N", client);
 }
-
 
 ON_EVENT_POST(player_say)
 {
-	int client = GetClientOfUserId(event.GetInt("userid"));
-	
-	PrintToServer("ON_EVENT_POST: player_say (%N)",client);
+    int client = GetClientOfUserId(event.GetInt("userid"));
+    PrintToServer("POST player_say: %N", client);
 }
-
-
 ```
+
+---
+
+## Important Notes
+
+* **Public functions only.** `methodmap` methods are not supported as slots.
+* Macros perform compile-time type checking. The extension catches missing `public` modifiers at load time and prevents the plugin from running.
+
+---
+
+## Changelog
+
+### v1.5.0
+* **AutoCvar (`auto_cvar.inc`):** Declarative ConVar wrapper that keeps typed global variables in sync automatically. Supports `BindConVar` (existing cvars) and `CreateConVar` (new plugin-owned cvars), with optional bounds chaining and change callbacks.
+
+### v1.2.1
+* Switched to SourceMod's internal `EvictWithError` for safer error handling.
+* Added `OnAllSignalsLoaded` lifecycle signal.
+* Added `console_macro.inc` and `event_hook_macro.inc` shortcut macros.
