@@ -3,8 +3,12 @@ name: Build Signal Extension (Reusable Template)
 on:
   workflow_call:
     inputs:
-      sdk-branch:
-        description: 'Metamod:Source / SourceMod git branch to build against'
+      mms-branch:
+        description: 'Metamod:Source git branch to build against'
+        required: true
+        type: string
+      sm-branch:
+        description: 'SourceMod git branch to build against'
         required: true
         type: string
       build-name:
@@ -46,20 +50,20 @@ jobs:
         python3 -m pip install git+https://github.com/alliedmodders/ambuild
 
     # 4️⃣ Checkout Metamod:Source
-    - name: Checkout Metamod:Source (${{ inputs.sdk-branch }})
+    - name: Checkout Metamod:Source (${{ inputs.mms-branch }})
       uses: actions/checkout@v4
       with:
         repository: alliedmodders/metamod-source
-        ref: ${{ inputs.sdk-branch }}
+        ref: ${{ inputs.mms-branch }}
         path: mmsource
         submodules: recursive
 
     # 5️⃣ Checkout SourceMod
-    - name: Checkout SourceMod (${{ inputs.sdk-branch }})
+    - name: Checkout SourceMod (${{ inputs.sm-branch }})
       uses: actions/checkout@v4
       with:
         repository: alliedmodders/sourcemod
-        ref: ${{ inputs.sdk-branch }}
+        ref: ${{ inputs.sm-branch }}
         path: sourcemod
         submodules: recursive
 
@@ -117,19 +121,19 @@ jobs:
         python -m pip install --upgrade pip setuptools wheel
         pip install git+https://github.com/alliedmodders/ambuild
 
-    - name: Checkout Metamod:Source (${{ inputs.sdk-branch }})
+    - name: Checkout Metamod:Source (${{ inputs.mms-branch }})
       uses: actions/checkout@v4
       with:
         repository: alliedmodders/metamod-source
-        ref: ${{ inputs.sdk-branch }}
+        ref: ${{ inputs.mms-branch }}
         path: mmsource
         submodules: recursive
 
-    - name: Checkout SourceMod (${{ inputs.sdk-branch }})
+    - name: Checkout SourceMod (${{ inputs.sm-branch }})
       uses: actions/checkout@v4
       with:
         repository: alliedmodders/sourcemod
-        ref: ${{ inputs.sdk-branch }}
+        ref: ${{ inputs.sm-branch }}
         path: sourcemod
         submodules: recursive
 

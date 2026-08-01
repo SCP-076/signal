@@ -1,12 +1,24 @@
 name: Build Signal Extension (SM master)
 
-# Manual trigger only
+# Manual trigger only — MM / SM branches can be overridden in the run dialog
 on:
   workflow_dispatch:
+    inputs:
+      mms-branch:
+        description: 'Metamod:Source branch'
+        required: false
+        default: 'master'
+        type: string
+      sm-branch:
+        description: 'SourceMod branch'
+        required: false
+        default: 'master'
+        type: string
 
 jobs:
   build-sdk-master:
     uses: ./.github/workflows/build.yml
     with:
-      sdk-branch: master
+      mms-branch: ${{ inputs.mms-branch }}
+      sm-branch: ${{ inputs.sm-branch }}
       build-name: master
