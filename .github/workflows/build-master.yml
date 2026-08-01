@@ -1,0 +1,12 @@
+name: Build Signal Extension (SM master)
+
+# Manual trigger only
+on:
+  workflow_dispatch:
+
+jobs:
+  build-sdk-master:
+    uses: ./.github/workflows/build.yml
+    with:
+      sdk-branch: master
+      build-name: master

@@ -1,11 +1,16 @@
-name: Build Signal Extension
+name: Build Signal Extension (Reusable Template)
 
 on:
-  push:
-    branches: [ "main", "master" ]
-  pull_request:
-    branches: [ "main", "master" ]
-  workflow_dispatch:
+  workflow_call:
+    inputs:
+      sdk-branch:
+        description: 'Metamod:Source / SourceMod git branch to build against'
+        required: true
+        type: string
+      build-name:
+        description: 'Short name used in artifact names (e.g. 1.12, master)'
+        required: true
+        type: string
 
 jobs:
 
@@ -41,20 +46,20 @@ jobs:
         python3 -m pip install git+https://github.com/alliedmodders/ambuild
 
     # 4️⃣ Checkout Metamod:Source
-    - name: Checkout Metamod:Source
+    - name: Checkout Metamod:Source (${{ inputs.sdk-branch }})
       uses: actions/checkout@v4
       with:
         repository: alliedmodders/metamod-source
-        ref: 1.12-dev
+        ref: ${{ inputs.sdk-branch }}
         path: mmsource
         submodules: recursive
 
     # 5️⃣ Checkout SourceMod
-    - name: Checkout SourceMod
+    - name: Checkout SourceMod (${{ inputs.sdk-branch }})
       uses: actions/checkout@v4
       with:
         repository: alliedmodders/sourcemod
-        ref: 1.12-dev
+        ref: ${{ inputs.sdk-branch }}
         path: sourcemod
         submodules: recursive
 
@@ -87,7 +92,7 @@ jobs:
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: signal-extension-Linux-x86-x64
+        name: signal-extension-${{ inputs.build-name }}-Linux-x86-x64
         path: extension/build/package/
 
 
@@ -112,19 +117,19 @@ jobs:
         python -m pip install --upgrade pip setuptools wheel
         pip install git+https://github.com/alliedmodders/ambuild
 
-    - name: Checkout Metamod:Source
+    - name: Checkout Metamod:Source (${{ inputs.sdk-branch }})
       uses: actions/checkout@v4
       with:
         repository: alliedmodders/metamod-source
-        ref: 1.12-dev
+        ref: ${{ inputs.sdk-branch }}
         path: mmsource
         submodules: recursive
 
-    - name: Checkout SourceMod
+    - name: Checkout SourceMod (${{ inputs.sdk-branch }})
       uses: actions/checkout@v4
       with:
         repository: alliedmodders/sourcemod
-        ref: 1.12-dev
+        ref: ${{ inputs.sdk-branch }}
         path: sourcemod
         submodules: recursive
 
@@ -148,5 +153,5 @@ jobs:
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: signal-extension-Windows-x86-x64
+        name: signal-extension-${{ inputs.build-name }}-Windows-x86-x64
         path: extension/build/package/

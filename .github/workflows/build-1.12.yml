@@ -1,0 +1,12 @@
+name: Build Signal Extension (SM 1.12)
+
+# Manual trigger only
+on:
+  workflow_dispatch:
+
+jobs:
+  build-sdk-1-12:
+    uses: ./.github/workflows/build.yml
+    with:
+      sdk-branch: 1.12-dev
+      build-name: 1.12
